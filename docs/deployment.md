@@ -24,7 +24,7 @@ Use [.env.production.example](../.env.production.example) as a reference; supply
 | `DATABASE_URL` | PostgreSQL connection URL with production credentials and TLS settings appropriate to your provider. |
 | `REDIS_URL` | Authenticated Redis endpoint; use `rediss://` for TLS. |
 | `FLIGHT_PROVIDER` | `manual`. Disables the mock booking flow. |
-| `AERODATABOX_RAPIDAPI_KEY` or `AERODATABOX_API_KEY` | Optional server-only key for RapidAPI or AeroDataBox Direct. RapidAPI takes precedence. Enables schedule search, not PNR lookup or delay tracking. Validate quotas, coverage, and caching permissions. |
+| `AERODATABOX_RAPIDAPI_KEY` | Optional server-only RapidAPI key with an AeroDataBox subscription. Enables schedule search, not PNR lookup or delay tracking. Validate quotas, coverage, and caching permissions. |
 | `ALLOW_INSECURE_HTTP`, `ALLOW_DEMO_SEED` | Unset or `false`. Insecure HTTP and demo seeding are local-only. |
 | `TRUST_PROXY` | `true` only behind a single trusted ingress that overwrites forwarding headers and is the only caller able to reach the upstream. |
 

@@ -97,7 +97,7 @@ test('schedule adapter normalizes flight codes and keeps departure-local dates a
 test('RapidAPI lookup uses the dated schedule endpoint and keeps credentials in headers', async () => {
   const date = '2027-01-05';
   let called = false;
-  const provider = new AeroDataBoxSchedule({gateway: 'rapidapi', key: 'unit-test-placeholder'}, async (input, init) => {
+  const provider = new AeroDataBoxSchedule('unit-test-placeholder', async (input, init) => {
     called = true;
     const url = new URL(String(input));
     assert.equal(url.origin, 'https://aerodatabox.p.rapidapi.com');
@@ -106,6 +106,7 @@ test('RapidAPI lookup uses the dated schedule endpoint and keeps credentials in 
     const headers = new Headers(init?.headers);
     assert.equal(headers.get('x-rapidapi-key'), 'unit-test-placeholder');
     assert.equal(headers.get('x-rapidapi-host'), url.hostname);
+    assert.equal(headers.get('accept'), 'application/json');
     assert.equal(headers.has('x-api-key'), false);
     assert.equal(init?.redirect, 'error');
     return Response.json([{departure: {airport: {iata: 'SEA'}, scheduledTime: {local: `${date} 23:40-08:00`}}, arrival: {airport: {iata: 'PDX'}}}]);
@@ -119,9 +120,7 @@ test('RapidAPI lookup uses the dated schedule endpoint and keeps credentials in 
 test('schedule lookup distinguishes no result from quota or authentication errors', async () => {
   const query = {code: 'AS2223', date: '2027-01-05'};
   for (const status of [204, 404, 401, 403, 429]) {
-    const provider = new AeroDataBoxSchedule({gateway: 'direct', key: 'unit-test-placeholder'}, async (input, init) => {
-      assert.equal(new URL(String(input)).origin, 'https://api.aerodatabox.com');
-      assert.equal(new Headers(init?.headers).get('x-api-key'), 'unit-test-placeholder');
+    const provider = new AeroDataBoxSchedule('unit-test-placeholder', async () => {
       return new Response(null, {status});
     });
     if (status === 204 || status === 404) assert.deepEqual(await provider.search(query), []);

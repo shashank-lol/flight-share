@@ -21,7 +21,7 @@ Choose **Find My Flight** to go directly to search, paste-ticket import, or manu
 2. Copy `.env.example` to `.env`. In your private `.env`, set `AERODATABOX_RAPIDAPI_KEY` to the new key. Set `FLIGHT_PROVIDER=manual` to hide mock booking during live testing. Never commit `.env` or put a key in `NEXT_PUBLIC_*` configuration.
 3. Apply the environment with `docker compose up -d --force-recreate app`. In **Find My Flight**, search a flight code and a known departure date (local to the departure airport). A successful live result is labeled **Published schedule**. If unavailable, confirm the subscription covers the dated flight endpoint and try manual entry.
 
-The app sends only the flight code and date to the provider, from the server. `AERODATABOX_API_KEY` is an alternative for AeroDataBox Direct; if both are configured, RapidAPI takes precedence. Lookups cache successful results for one hour and empty results for five minutes. Confirm these cache durations are suitable for your plan before public operation. No PNR verification, background delay tracking, or cancellation alerts are included.
+The server calls the documented [AeroDataBox RapidAPI endpoint](https://doc.aerodatabox.com/rapidapi.html), `GET /flights/number/{flightCode}/{departureDate}`, with `dateLocalRole=Departure`. It sends no passenger information. Lookups cache successful results for one hour and empty results for five minutes. Confirm these cache durations are suitable for your plan before public operation. No PNR verification, background delay tracking, or cancellation alerts are included.
 
 Optional: populate the local database with fictional travel data. The seed is not run on startup.
 
@@ -70,7 +70,7 @@ Run integration and browser tests against **disposable** PostgreSQL and Redis in
 - **Next.js App Router, React, and TypeScript** implement pages and JSON APIs. The custom Node.js server hosts **Socket.IO** on the same origin as the web app.
 - **PostgreSQL and Prisma** persist accounts, flight rooms, membership, preferences, messages and safety actions. **Redis** supports short-lived state and realtime coordination.
 - **Guest sessions** use secure session cookies on HTTPS. PostgreSQL stores only the token digest; no email is collected from guests. Sessions cannot be recovered across devices.
-- **Flight lookup** checks existing room schedules and optionally queries [AeroDataBox](https://doc.aerodatabox.com/) via RapidAPI or Direct. Coverage depends on the provider; lookup does not verify who booked the flight. Manual entry works without credentials.
+- **Flight lookup** checks existing room schedules and optionally queries AeroDataBox via RapidAPI. Coverage depends on the provider; lookup does not verify who booked the flight. Manual entry works without credentials.
 - **Flyer points** are in-app activity, not airline miles or a trust score: 100 per distinct non-demo flight added, plus 50 per mutually self-confirmed ride (one bonus per flight). Display in ride discovery can be switched off in Settings.
 - **Baggage matching** shows a potential weight fit, not permission to combine allowances. Check the airline's policy and never accept luggage or items from strangers.
 - **Health**: `GET /api/health` checks liveness; `GET /api/health?ready=1` checks database and Redis readiness.

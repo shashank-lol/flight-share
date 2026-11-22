@@ -30,28 +30,18 @@ export function mapSchedule(payload: unknown, query: Query): FlightDetails[] {
   });
 }
 
-type AeroDataBoxCredentials = {gateway: 'rapidapi' | 'direct'; key: string};
 const rapidHost = 'aerodatabox.p.rapidapi.com';
 
-function configuredCredentials(): AeroDataBoxCredentials | undefined {
-  const rapidKey = process.env.AERODATABOX_RAPIDAPI_KEY?.trim();
-  if (rapidKey) return {gateway: 'rapidapi', key: rapidKey};
-  const directKey = process.env.AERODATABOX_API_KEY?.trim();
-  return directKey ? {gateway: 'direct', key: directKey} : undefined;
-}
-
 export class AeroDataBoxSchedule implements FlightScheduleProvider {
-  constructor(private readonly credentials: AeroDataBoxCredentials, private readonly request: typeof fetch = fetch) {}
+  constructor(private readonly key: string, private readonly request: typeof fetch = fetch) {}
 
   async search(query: Query) {
-    const {gateway, key} = this.credentials;
-    const rapid = gateway === 'rapidapi';
-    const url = new URL(`/flights/number/${query.code}/${query.date}`, rapid ? `https://${rapidHost}` : 'https://api.aerodatabox.com');
+    const url = new URL(`/flights/number/${query.code}/${query.date}`, `https://${rapidHost}`);
     url.searchParams.set('dateLocalRole', 'Departure');
     url.searchParams.set('withAircraftImage', 'false');
     url.searchParams.set('withLocation', 'false');
     url.searchParams.set('withFlightPlan', 'false');
-    const headers = new Headers(rapid ? {'x-rapidapi-key': key, 'x-rapidapi-host': rapidHost} : {'X-Api-Key': key});
+    const headers = new Headers({accept: 'application/json', 'x-rapidapi-key': this.key, 'x-rapidapi-host': rapidHost});
     const response = await this.request(url, {headers, signal: AbortSignal.timeout(4500), cache: 'no-store', redirect: 'error'});
     if (response.status === 204 || response.status === 404) return [];
     if (!response.ok) throw new Error('Schedule provider unavailable');
@@ -61,15 +51,15 @@ export class AeroDataBoxSchedule implements FlightScheduleProvider {
 
 export async function searchFlights(query: Query) {
   const identity = flightCode(query.code);
-  const credentials = configuredCredentials();
+  const key = process.env.AERODATABOX_RAPIDAPI_KEY?.trim();
   let liveError = false;
   const live = async () => {
-    if (!credentials) return [];
-    const cacheKey = `fs:schedule:v2:${credentials.gateway}:${identity.airline}${identity.flightNumber}:${query.date}`;
+    if (!key) return [];
+    const cacheKey = `fs:schedule:v2:rapidapi:${identity.airline}${identity.flightNumber}:${query.date}`;
     try {
       const cached = await redis.get(cacheKey);
       if (cached) return JSON.parse(cached) as FlightDetails[];
-      const results = await new AeroDataBoxSchedule(credentials).search(query);
+      const results = await new AeroDataBoxSchedule(key).search(query);
       await redis.set(cacheKey, JSON.stringify(results), 'EX', results.length ? 3600 : 300);
       return results;
     } catch { liveError = true; return []; }
@@ -88,5 +78,5 @@ export async function searchFlights(query: Query) {
   if (canUseDevDelivery() && process.env.FLIGHT_PROVIDER === 'mock' && identity.airline === 'BA' && identity.flightNumber === '117') {
     add({...identity, departureAirport: 'LHR', arrivalAirport: 'JFK', departureDate: query.date, departureTime: '08:25'}, 'DEMO');
   }
-  return {items: [...items.values()], liveEnabled: !!credentials, liveError};
+  return {items: [...items.values()], liveEnabled: !!key, liveError};
 }

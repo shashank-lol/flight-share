@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+  SELF_REPORTED
+  MOCK
+  VERIFIED
+}
+
+enum Transportation {
+  NONE
+  CAB_SHARE
+  PUBLIC_TRANSIT
+  OWN_RIDE
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String?  @unique
+  emailVerified DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile          PassengerProfile?
+  sessions         Session[]
+  memberships      FlightMembership[]
+  verifications    VerificationRecord[]
+  conversationsOne Conversation[] @relation("ParticipantOne")
+  conversationsTwo Conversation[] @relation("ParticipantTwo")
+  messages         Message[]
+  flightMessages   FlightGroupMessage[]
+  rideConfirmations RideConfirmation[]
+  notifications    Notification[]
+  blocksMade       UserBlock[] @relation("Blocker")
+  blocksReceived   UserBlock[] @relation("Blocked")
+  reportsMade      UserReport[] @relation("Reporter")
+  reportsReceived  UserReport[] @relation("Reported")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PassengerProfile {
+  id                    String         @id @default(uuid())
+  userId                String         @unique
+  displayName           String
+  isAnonymous           Boolean        @default(false)
+  showBaggage           Boolean        @default(true)
+  showTravelPreferences Boolean        @default(true)
+  showFlyer             Boolean        @default(true)
+  transportation        Transportation @default(NONE)
+  companionship         Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Flight {
+  id               String   @id @default(uuid())
+  instanceKey      String   @unique
+  airline          String
+  flightNumber     String
+  departureAirport String
+  arrivalAirport   String
+  departureDate    DateTime @db.Date
+  departureTime    String?
+  externalFlightId String?
+  status           String?
+  createdAt        DateTime @default(now())
+
+  memberships   FlightMembership[]
+  verifications VerificationRecord[]
+  conversations Conversation[] @relation("FlightConversations")
+  rideConversations Conversation[] @relation("RideFlightConversations")
+  groupMessages FlightGroupMessage[]
+
+  @@index([departureDate])
+  @@index([departureAirport, departureDate])
+  @@index([airline, flightNumber, departureDate])
+  @@unique([airline, externalFlightId])
+}
+
+model FlightMembership {
+  id                    String             @id @default(uuid())
+  flightId              String
+  userId                String
+  alias                 String
+  baggageAllowance      Decimal            @db.Decimal(6, 2)
+  expectedBaggageWeight  Decimal            @db.Decimal(6, 2)
+  cabinBaggage           String?
+  baggageReported       Boolean            @default(true)
+  partySize              Int                @default(1)
+  rideOptIn              Boolean            @default(false)
+  pickupArea             String?
+  verificationStatus     VerificationStatus
+  joinedAt              DateTime           @default(now())
+  isActive              Boolean            @default(true)
+  flight                Flight             @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flightId, userId])
+  @@unique([flightId, alias])
+  @@index([flightId, isActive, joinedAt])
+  @@index([userId, isActive])
+  @@index([flightId, rideOptIn, isActive])
+}
+
+model Conversation {
+  id               String   @id @default(uuid())
+  flightId         String
+  rideFlightId     String?
+  scopeKey         String   @unique
+  participantOneId String
+  participantTwoId String
+  createdAt        DateTime @default(now())
+  flight           Flight   @relation("FlightConversations", fields: [flightId], references: [id], onDelete: Cascade)
+  rideFlight       Flight?  @relation("RideFlightConversations", fields: [rideFlightId], references: [id], onDelete: Cascade)
+  participantOne   User     @relation("ParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
+  participantTwo   User     @relation("ParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  rideConfirmations RideConfirmation[]
+
+  @@index([flightId])
+  @@index([rideFlightId])
+  @@index([participantOneId])
+  @@index([participantTwoId])
+}
+
+model FlightGroupMessage {
+  id        String   @id @default(uuid())
+  flightId  String
+  senderId  String
+  clientId  String
+  content   String
+  createdAt DateTime @default(now())
+  flight    Flight   @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([flightId, senderId, clientId])
+  @@index([flightId, createdAt, id])
+  @@index([senderId])
+}
+
+model RideConfirmation {
+  conversationId String
+  userId         String
+  createdAt      DateTime @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  senderId       String
+  clientId       String
+  content        String
+  createdAt      DateTime @default(now())
+  readAt         DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, senderId, clientId])
+  @@index([conversationId, createdAt, id])
+  @@index([conversationId, readAt, senderId])
+  @@index([senderId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt, id])
+  @@index([userId, readAt])
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model UserReport {
+  id             String   @id @default(uuid())
+  reporterId     String
+  reportedUserId String
+  reason         String
+  description    String?
+  createdAt      DateTime @default(now())
+  status         String   @default("OPEN")
+  reporter       User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported       User     @relation("Reported", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId, createdAt])
+  @@index([reportedUserId])
+  @@index([status, createdAt])
+}
+
+model VerificationRecord {
+  id                 String             @id @default(uuid())
+  userId             String
+  flightId           String
+  verificationMethod String
+  verificationStatus VerificationStatus
+  verifiedAt         DateTime?
+  expiresAt          DateTime?
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flight             Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, flightId])
+  @@index([flightId])
+}

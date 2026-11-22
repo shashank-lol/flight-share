@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Validate, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://flightshare:flightshare_ci@127.0.0.1:5432/flightshare
+      REDIS_URL: redis://127.0.0.1:6379
+      APP_ORIGIN: http://localhost:3000
+      FLIGHT_PROVIDER: mock
+      ALLOW_INSECURE_HTTP: 'true'
+      TRUST_PROXY: 'false'
+      NEXT_TELEMETRY_DISABLED: '1'
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_DB: flightshare
+          POSTGRES_USER: flightshare
+          POSTGRES_PASSWORD: flightshare_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flightshare -d flightshare"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-bookworm
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run db:deploy
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Run API and browser tests against the production build
+        shell: bash
+        run: |
+          NODE_ENV=production node --import tsx server.ts > "$RUNNER_TEMP/flight-share.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          if ! curl --silent --show-error --fail --retry 30 --retry-all-errors --retry-delay 2 "$APP_ORIGIN/api/health?ready=1"; then
+            cat "$RUNNER_TEMP/flight-share.log"
+            exit 1
+          fi
+          npm run test:integration
+          npm run test:e2e
+      - name: Upload Playwright diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

@@ -1,0 +1,12 @@
+The images and typeface are hosted locally. There are no asset requests
+to a third party when viewing the landing page.
+
+Photography: Unsplash license (https://unsplash.com/license).
+The portraits illustrate a sample flight room and are not actual users.
+Original image sources:
+  above-the-clouds.webp — https://images.unsplash.com/photo-1436491865332-7a61a109cc05
+  portrait-maya.webp — https://images.unsplash.com/photo-1534528741775-53994a69daeb
+  portrait-alex.webp — https://images.unsplash.com/photo-1500648767791-00dcc994a43e
+  portrait-jamie.webp — https://images.unsplash.com/photo-1531123897727-8f129e1688ce
+
+Manrope: SIL Open Font License 1.1, included at fonts/manrope-OFL.txt.

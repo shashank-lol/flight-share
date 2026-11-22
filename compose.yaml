@@ -1,0 +1,93 @@
+# Local testing only. The insecure flags and service passwords are not for production.
+x-app: &app
+  image: flight-share:local
+  build: .
+  environment: &app-env
+    DATABASE_URL: postgresql://flightshare:flightshare_local@db:5432/flightshare
+    REDIS_URL: redis://redis:6379
+    APP_ORIGIN: http://localhost:${APP_PORT:-3000}
+    PORT: '3000'
+    FLIGHT_PROVIDER: ${FLIGHT_PROVIDER:-mock}
+    AERODATABOX_RAPIDAPI_KEY: ${AERODATABOX_RAPIDAPI_KEY:-}
+    AERODATABOX_API_KEY: ${AERODATABOX_API_KEY:-}
+    ALLOW_INSECURE_HTTP: 'true'
+    TRUST_PROXY: 'false'
+
+services:
+  db:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: flightshare
+      POSTGRES_USER: flightshare
+      POSTGRES_PASSWORD: flightshare_local
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-bookworm
+    command: [redis-server, --appendonly, 'yes']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    image: flight-share-migration:local
+    build:
+      context: .
+      target: migration
+    command: [npm, run, 'db:deploy']
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    ports:
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health?ready=1', {signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  seed:
+    <<: *app
+    image: flight-share-migration:local
+    build:
+      context: .
+      target: migration
+    profiles: [demo]
+    command: [npm, run, 'db:seed']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      ALLOW_DEMO_SEED: 'true'
+
+volumes:
+  postgres-data:
+  redis-data:

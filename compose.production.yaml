@@ -1,0 +1,19 @@
+# VPS deployment: external PostgreSQL and Redis; nginx on the host.
+x-app: &app
+  image: ${FLIGHT_SHARE_IMAGE:?set FLIGHT_SHARE_IMAGE to your release image}
+  env_file: ${FLIGHT_SHARE_ENV_FILE:-/etc/flight-share/app.env}
+  environment:
+    PORT: '3000'
+
+services:
+  app:
+    <<: *app
+    ports:
+      - '127.0.0.1:3000:3000'
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    image: ${FLIGHT_SHARE_MIGRATION_IMAGE:-flight-share-migration:release}
+    profiles: [release]
+    command: [npm, run, 'db:deploy']

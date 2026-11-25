@@ -2,27 +2,27 @@
 
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {ArrowRight, Car, Luggage, LogOut, MessageCircle, MessagesSquare, Search, ShieldCheck, UserRound, Users} from 'lucide-react';
-import {useState, type FormEvent} from 'react';
+import {ArrowRight, Bell, Car, Info, Luggage, LogOut, MessageCircle, MessagesSquare, Search, ShieldCheck, UserRound, Users} from 'lucide-react';
+import {useRef, useState, type FormEvent} from 'react';
 import {api, flightLabel, formatDate, transportationLabels, type Page, type Passenger, type Policy, type Room} from './api';
-import {AppShell} from './app-shell';
+import {AppShell, useNotificationUnread} from './app-shell';
 import {BaggageMatches} from './baggage-matches';
 import {Field} from './fields';
 import {FlightChat} from './flight-chat';
 import {useRealtime} from './realtime';
 import {Dialog, SafetyActions} from './safety';
-import {ConversationList, startConversation} from './messages';
+import {startConversation} from './messages';
+import {MoreActions} from './more-actions';
 import {RideDiscovery} from './ride-discovery';
 import {Empty, ErrorMessage, Loading, Notice, Pager, StatusBadge} from './ui';
 import {useResource} from './use-resource';
+import './flight-room.css';
 
 const sections = [
-  {id: 'chat', label: 'Group chat', short: 'Chat', icon: MessagesSquare},
-  {id: 'passengers', label: 'Passengers', short: 'People', icon: Users},
-  {id: 'rides', label: 'Airport rides', short: 'Cabs', icon: Car},
-  {id: 'matches', label: 'Baggage matches', short: 'Baggage', icon: Luggage},
-  {id: 'policy', label: 'Airline policy', short: 'Policy', icon: ShieldCheck},
-  {id: 'messages', label: 'Messages', short: 'DMs', icon: MessageCircle},
+  {id: 'chat', label: 'Chat', icon: MessagesSquare},
+  {id: 'passengers', label: 'People', icon: Users},
+  {id: 'rides', label: 'Cabs', icon: Car},
+  {id: 'matches', label: 'Baggage', icon: Luggage},
 ] as const;
 const filters = [{id: 'all', label: 'Everyone'}, {id: 'companions', label: 'Companionship'}];
 
@@ -76,9 +76,8 @@ function AirlinePolicy({flightId}: {flightId: string}) {
   </section>;
 }
 
-function LeaveRoom({flightId}: {flightId: string}) {
+function LeaveRoom({flightId, onClose}: {flightId: string; onClose: () => void}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   function submit(event: FormEvent) {
@@ -87,17 +86,39 @@ function LeaveRoom({flightId}: {flightId: string}) {
     setBusy(true); setError(undefined);
     void api(`flights/${flightId}/leave`, {method: 'DELETE'}).then(() => router.replace('/dashboard'), (issue: unknown) => { setError(issue); setBusy(false); });
   }
+  return <Dialog title="Leave this flight?" onClose={() => { if (!busy) onClose(); }}><form className="fa-form" onSubmit={submit}>
+    <p className="fa-intro">You’ll lose access to this flight’s group chat, passenger list, baggage matches and cab listings. Private chats will stay available only if you still share another eligible travel connection.</p>
+    <ErrorMessage error={error} /><div className="fa-actions"><button type="button" className="fa-button fa-secondary" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" className="fa-button fa-danger" disabled={busy}>{busy ? 'Leaving…' : 'Leave flight'}</button></div>
+  </form></Dialog>;
+}
+
+function RoomNavigation({flightId, active}: {flightId: string; active: typeof sections[number]['id'] | 'policy'}) {
+  const [dialog, setDialog] = useState<'about' | 'leave'>();
+  const nav = useRef<HTMLElement>(null);
+  const unread = useNotificationUnread();
+  const close = () => {
+    setDialog(undefined);
+    requestAnimationFrame(() => nav.current?.querySelector<HTMLButtonElement>('.fa-more-trigger')?.focus());
+  };
+  const roomHref = `/flights/${flightId}`;
   return <>
-    <button type="button" className="fa-icon-button" title="Leave flight" aria-label="Leave flight" onClick={() => { setError(undefined); setOpen(true); }}><LogOut size={18} aria-hidden="true" /></button>
-    {open && <Dialog title="Leave this flight?" onClose={() => { if (!busy) setOpen(false); }}><form className="fa-form" onSubmit={submit}>
-      <p className="fa-intro">You’ll lose access to this flight’s group chat, passenger list, baggage matches and cab listings. Private chats will stay available only if you still share another eligible travel connection.</p>
-      <ErrorMessage error={error} /><div className="fa-actions"><button type="button" className="fa-button fa-secondary" onClick={() => setOpen(false)} disabled={busy}>Cancel</button><button type="submit" className="fa-button fa-danger" disabled={busy}>{busy ? 'Leaving…' : 'Leave flight'}</button></div>
-    </form></Dialog>}
+    <nav ref={nav} className="fa-room-nav" aria-label="Flight sections">
+      {sections.map(({id, label, icon: Icon}) => <Link aria-current={id === active ? 'page' : undefined} key={id} href={id === 'chat' ? roomHref : `${roomHref}?tab=${id}`}><Icon size={19} aria-hidden="true" /><span>{label}</span></Link>)}
+      <MoreActions label={unread > 0 ? `More, ${unread} unread notifications` : 'More'} unread={unread} className={`fa-room-more${active === 'policy' ? ' fa-room-more-current' : ''}`}>
+        <Link className="fa-more-item" href={`${roomHref}?tab=policy`} aria-current={active === 'policy' ? 'page' : undefined}><ShieldCheck size={18} aria-hidden="true" /> Airline policy</Link>
+        <Link className="fa-more-item" href="/dashboard/notifications"><Bell size={18} aria-hidden="true" /> Notifications{unread > 0 && <span className="fa-count" aria-label={`${unread} unread`}>{unread > 99 ? '99+' : unread}</span>}</Link>
+        <Link className="fa-more-item" href="/dashboard/messages"><MessageCircle size={18} aria-hidden="true" /> Messages</Link>
+        <button type="button" className="fa-more-item" onClick={() => setDialog('about')}><Info size={18} aria-hidden="true" /> About this group chat</button>
+        <button type="button" className="fa-more-item" onClick={() => setDialog('leave')}><LogOut size={18} aria-hidden="true" /> Leave flight</button>
+      </MoreActions>
+    </nav>
+    {dialog === 'about' && <Dialog title="About this group chat" onClose={close}><p className="fa-intro">Travellers in this flight room can see and join the group chat. Don’t share booking or payment details.</p></Dialog>}
+    {dialog === 'leave' && <LeaveRoom flightId={flightId} onClose={close} />}
   </>;
 }
 
 export function FlightRoom({flightId, tab}: {flightId: string; tab?: string}) {
-  const active = sections.find((section) => section.id === tab)?.id ?? 'chat';
+  const active = tab === 'policy' ? 'policy' : (sections.find((section) => section.id === tab)?.id ?? 'chat');
   const room = useResource<Room>(`flights/${flightId}`);
   useRealtime({connect: room.reload, 'flight:updated': (event) => { if (event.flightId === flightId) room.reload(); }});
   const details = room.data;
@@ -105,14 +126,16 @@ export function FlightRoom({flightId, tab}: {flightId: string; tab?: string}) {
     <ErrorMessage error={room.error} retry={room.reload} />
     {!details && !room.error && <Loading label="Loading your flight room…" />}
     {details && <>
-      <header className="fa-room-title"><div><div className="fa-room-route"><h1>{flightLabel(details)}</h1><span>{details.departureAirport}<ArrowRight size={14} aria-label="to" />{details.arrivalAirport}</span></div><p>{formatDate(details.departureDate)}{details.departureTime ? ` · ${details.departureTime} local` : ''}</p></div><div className="fa-room-membership"><StatusBadge status={details.membership.verificationStatus} /><LeaveRoom flightId={flightId} /></div></header>
+      <header className="fa-room-heading"><div>
+        <h1><span>{flightLabel(details)}</span>{' '}<span className="fa-room-route">{details.departureAirport}<ArrowRight size={14} aria-hidden="true" /><span className="fa-sr-only"> to </span>{details.arrivalAirport}</span></h1>
+        <p>{formatDate(details.departureDate)}{details.departureTime ? ` · ${details.departureTime} local` : ''}</p>
+      </div><StatusBadge status={details.membership.verificationStatus} /></header>
       {active === 'passengers' && <Directory flightId={flightId} />}
       {active === 'rides' && <RideDiscovery key={flightId} room={details} reload={room.reload} />}
       {active === 'chat' && <FlightChat flightId={flightId} members={details.memberCount} />}
       {active === 'matches' && <BaggageMatches key={flightId} flightId={flightId} />}
       {active === 'policy' && <AirlinePolicy flightId={flightId} />}
-      {active === 'messages' && <ConversationList flightId={flightId} />}
-      <nav className="fa-room-nav" aria-label="Flight sections">{sections.map(({id, label, short, icon: Icon}) => <Link aria-label={label} aria-current={id === active ? 'page' : undefined} key={id} href={`/flights/${flightId}${id === 'chat' ? '' : `?tab=${id}`}`}><Icon size={19} aria-hidden="true" /><span aria-hidden="true">{short}</span></Link>)}</nav>
+      <RoomNavigation key={flightId} flightId={flightId} active={active} />
     </>}
   </AppShell>;
 }

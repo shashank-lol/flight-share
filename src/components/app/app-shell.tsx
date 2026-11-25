@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {ArrowLeft, Bell, ChevronRight, LayoutGrid, MessageCircle, Plane, Plus, Settings, ShieldCheck} from 'lucide-react';
-import {useEffect, type ReactNode} from 'react';
+import {ArrowLeft, Bell, ChevronRight, History, LayoutGrid, MessageCircle, Plane, Plus, Settings, ShieldCheck} from 'lucide-react';
+import {createContext, useContext, useEffect, type ReactNode} from 'react';
 import {useRealtime} from './realtime';
+import {MoreActions} from './more-actions';
 import type {Notifications} from './social-types';
 import {AppBrand} from './ui';
 import {useResource} from './use-resource';
@@ -16,8 +17,10 @@ const navigation = [
   {area: 'notifications', href: '/dashboard/notifications', name: 'Notifications', icon: Bell},
   {area: 'settings', href: '/dashboard/settings', name: 'Settings', icon: Settings},
 ] as const;
+const NotificationUnread = createContext(0);
+export function useNotificationUnread() { return useContext(NotificationUnread); }
 
-export function AppShell({area, breadcrumb, children}: {area: Area; breadcrumb?: string; children: ReactNode}) {
+export function AppShell({area, breadcrumb, children, past = false}: {area: Area; breadcrumb?: string; children: ReactNode; past?: boolean}) {
   const router = useRouter();
   const notices = useResource<Notifications>('notifications');
   useRealtime({connect: notices.reload, 'notification:new': notices.reload, 'conversations:updated': notices.reload, 'session:revoked': () => router.replace('/onboarding')});
@@ -26,9 +29,13 @@ export function AppShell({area, breadcrumb, children}: {area: Area; breadcrumb?:
     return () => window.removeEventListener('flightshare:notifications', notices.reload);
   }, [notices.reload]);
   const unread = notices.data?.unreadCount ?? 0;
-  return <div className={`fa-app${area === 'flight' ? ' fa-flight-shell' : ''}`}>
+  return <NotificationUnread.Provider value={unread}><div className={`fa-app${area === 'flight' ? ' fa-flight-shell' : area === 'dashboard' ? ' fa-dashboard-shell' : ''}`}>
     <a className="fs-skip-link" href="#app-main">Skip to content</a>
-    <header className="fa-app-header"><div className="fa-wrap fa-header-inner"><div className="fa-header-brand">{area === 'flight' && <Link href="/dashboard" className="fa-icon-button fa-flight-shortcut" aria-label="My flights" title="My flights"><ArrowLeft size={20} aria-hidden="true" /></Link>}<AppBrand /></div><div className="fa-header-right">{area === 'flight' && <Link href="/dashboard/notifications" className="fa-icon-button fa-flight-shortcut" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} title="Notifications"><Bell size={20} aria-hidden="true" />{unread > 0 && <span className="fa-shortcut-dot" />}</Link>}<Link href="/onboarding?add=1" className="fa-button fa-primary fa-compact fa-header-add"><Plus size={17} aria-hidden="true" /> <span>Add flight</span></Link></div></div></header>
+    <header className="fa-app-header"><div className="fa-wrap fa-header-inner"><div className="fa-header-brand">{(area === 'flight' || past) && <Link href="/dashboard" className={`fa-icon-button${area === 'flight' ? ' fa-flight-shortcut' : ''}`} aria-label="My flights" title="My flights"><ArrowLeft size={20} aria-hidden="true" /></Link>}<AppBrand /></div>{area !== 'flight' && <div className="fa-header-right"><Link href="/onboarding?add=1" className="fa-button fa-primary fa-compact fa-header-add"><Plus size={17} aria-hidden="true" /> <span>Add flight</span></Link>{area === 'dashboard' && <MoreActions label="More flight options" unread={unread}>
+      {past ? <Link className="fa-more-item" href="/dashboard"><LayoutGrid size={18} aria-hidden="true" /> My flights</Link> : <Link className="fa-more-item" href="/dashboard/history"><History size={18} aria-hidden="true" /> Past flights</Link>}
+      {navigation.filter(({area}) => area !== 'dashboard').map(({area, href, name, icon: Icon}) => <Link key={area} href={href} className="fa-more-item"><Icon size={18} aria-hidden="true" /> {name}{area === 'notifications' && unread > 0 && <span className="fa-count" aria-label={`${unread} unread`}>{unread > 99 ? '99+' : unread}</span>}</Link>)}
+      <Link href="/legal/community" className="fa-more-item"><ShieldCheck size={18} aria-hidden="true" /> Community guidelines</Link>
+    </MoreActions>}</div>}</div></header>
     <div className="fa-wrap fa-shell">
       <aside className="fa-sidebar">
         <p className="fa-sidebar-label">WORKSPACE</p>
@@ -44,5 +51,5 @@ export function AppShell({area, breadcrumb, children}: {area: Area; breadcrumb?:
         {children}
       </main>
     </div>
-  </div>;
+  </div></NotificationUnread.Provider>;
 }

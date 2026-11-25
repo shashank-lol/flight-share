@@ -25,6 +25,8 @@
 .fa-thread-status > .is-live { background: #357743; }
 .fa-thread-status > button { min-height: 22px; font-size: inherit; }
 .fa-thread-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; color: var(--fa-muted); font-size: .73rem; }
+.fa-group-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 3px 12px; padding-block: 8px; }
+.fa-group-heading .fa-thread-title { flex: none; }
 .fa-thread-confirm { margin-block-start: 7px; color: var(--fa-muted); font-size: .8rem; }
 .fa-thread-safety { flex: none; }
 .fa-thread-safety summary { list-style: none; }
@@ -92,8 +94,9 @@
 
 @media (max-width: 730px) {
   .fa-thread-private { height: clamp(260px, calc(var(--chat-viewport) - 143px), 720px); }
-  .fa-thread-group { height: clamp(200px, calc(var(--chat-viewport) - 133px - var(--fa-room-nav-height) - env(safe-area-inset-top, 0px)), 840px); }
+  .fa-thread-group { height: clamp(160px, calc(var(--chat-viewport) - 117px - var(--fa-room-nav-height) - env(safe-area-inset-top, 0px)), 840px); }
   .fa-thread-header { padding: 9px 10px; }
+  .fa-group-heading { padding-block: 7px; }
   .fa-thread-header .fa-avatar { width: 34px; height: 34px; }
   .fa-thread-heading-main { gap: 6px; }
   .fa-thread-message { max-width: 89%; }

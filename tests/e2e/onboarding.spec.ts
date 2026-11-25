@@ -33,24 +33,26 @@ test('home to flight room without email: manual flight, preferences and baggage 
     await page.getByRole('button', {name: 'Join flight room'}).click();
     await expect(page).toHaveURL(/\/flights\/[0-9a-f-]+$/);
     await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
-    await expect(page.getByRole('navigation', {name: 'Flight sections'}).getByRole('link', {name: 'Group chat'})).toHaveAttribute('aria-current', 'page');
+    const bottomNav = page.getByRole('navigation', {name: 'Flight sections'});
+    await expect(bottomNav.getByRole('link', {name: 'Chat', exact: true})).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Your baggage', {exact: true})).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
     await page.getByRole('textbox', {name: 'Your message'}).fill('Namaste! See you at the gate.');
     await page.getByRole('button', {name: 'Send message'}).click();
     await expect(page.getByRole('log').getByText('Namaste! See you at the gate.')).toBeVisible();
-    await page.getByRole('link', {name: 'Passengers', exact: true}).click();
+    await bottomNav.getByRole('link', {name: 'People', exact: true}).click();
     await expect(page.getByText('Anonymous Traveller (you)')).toBeVisible();
     await expect(page.getByText('Your baggage', {exact: true})).toHaveCount(0);
-    await page.getByRole('link', {name: 'Baggage matches', exact: true}).click();
+    await bottomNav.getByRole('link', {name: 'Baggage', exact: true}).click();
     await page.getByRole('button', {name: 'Add baggage'}).click();
     await page.getByRole('dialog').getByLabel('Baggage allowance (kg)', {exact: true}).fill('20');
     await page.getByRole('dialog').getByLabel('Expected baggage weight (kg)').fill('19');
     await page.getByRole('button', {name: 'Save baggage'}).click();
     await expect(page.getByText('Baggage updated')).toBeVisible();
     await expect(page.getByText('1 kg available', {exact: true})).toBeVisible();
-    await page.getByRole('link', {name: 'Airline policy'}).click();
+    await bottomNav.getByRole('button', {name: /^More\b/}).click();
+    await bottomNav.getByRole('link', {name: 'Airline policy'}).click();
     await expect(page.getByText('Policy not confirmed')).toBeVisible();
   } finally { await cleanup(page); }
 });
@@ -72,13 +74,40 @@ test('mobile demo booking is clearly labeled and rejects horizontal overflow', a
     await expect(page).toHaveURL(/\/flights\/[0-9a-f-]+$/);
     await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
     const bottomNav = page.getByRole('navigation', {name: 'Flight sections'});
-    await expect(bottomNav.getByRole('link')).toHaveCount(6);
+    await expect(bottomNav.getByRole('link')).toHaveText(['Chat', 'People', 'Cabs', 'Baggage']);
+    const more = bottomNav.getByRole('button', {name: /^More\b/});
+    await expect(more).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('link', {name: 'My flights'})).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('link', {name: /^Notifications\b/})).toHaveCount(0);
     const bounds = await bottomNav.boundingBox();
-    const composer = await page.getByRole('textbox', {name: 'Your message'}).boundingBox();
+    const message = page.getByRole('textbox', {name: 'Your message'});
+    const composer = await message.boundingBox();
     expect(bounds!.height).toBeLessThan(72);
     expect(bounds!.y + bounds!.height).toBeCloseTo(844, 0);
     expect(composer!.y + composer!.height).toBeLessThan(bounds!.y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await more.click();
+    await expect(bottomNav.getByRole('link', {name: /^Notifications\b/})).toHaveAttribute('href', '/dashboard/notifications');
+    await expect(bottomNav.getByRole('link', {name: 'Messages', exact: true})).toHaveAttribute('href', '/dashboard/messages');
+    const policy = bottomNav.getByRole('link', {name: 'Airline policy'});
+    await expect(policy).toBeInViewport();
+    const policyBounds = await policy.boundingBox();
+    expect(policyBounds!.y + policyBounds!.height).toBeLessThan(bounds!.y);
+    await page.keyboard.press('Escape');
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await expect(policy).toBeHidden();
+
+    // Chromium in CI has no virtual keyboard; simulate the shorter visible viewport.
+    await expect(message).toBeEnabled();
+    await message.focus();
+    await expect(message).toBeFocused();
+    await page.setViewportSize({width: 390, height: 360});
+    await expect.poll(async () => {
+      const [input, nav] = await Promise.all([message.boundingBox(), bottomNav.boundingBox()]);
+      return !!(input && nav && input.y >= 0 && input.y + input.height < nav.y);
+    }).toBe(true);
+    await page.setViewportSize({width: 390, height: 844});
+
     const profile = await page.request.get('/api/v1/profile');
     expect((await profile.json()).data.flyer.points).toBe(0);
     await page.goto('/onboarding?add=1');
@@ -125,7 +154,7 @@ test('pasted ticket stays local until reviewed and can join without reporting ba
     await page.getByRole('button', {name: 'Join flight room'}).click();
     await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
     await expect(page.getByRole('button', {name: 'Add baggage'})).toHaveCount(0);
-    await page.getByRole('link', {name: 'Baggage matches', exact: true}).click();
+    await page.getByRole('navigation', {name: 'Flight sections'}).getByRole('link', {name: 'Baggage', exact: true}).click();
     await expect(page.getByRole('button', {name: 'Add baggage'})).toBeVisible();
 
     expect(writes.map(({path}) => path)).toEqual(['/api/v1/flights/verify', '/api/v1/auth/guest', '/api/v1/flights/verify', '/api/v1/flights/join']);

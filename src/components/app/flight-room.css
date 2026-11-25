@@ -1,0 +1,84 @@
+.fa-flight-shell { --fa-room-nav-height: calc(58px + env(safe-area-inset-bottom, 0px)); }
+.fa-flight-shell .fa-shell { padding-block-end: calc(var(--fa-room-nav-height) + 14px); }
+.fa-flight-shell .fa-shell:has(.fa-thread-group) { padding-block-end: calc(var(--fa-room-nav-height) + 6px); }
+
+.fa-room-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding-block: 6px 8px;
+}
+.fa-room-heading h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: clamp(1.1rem, 3vw, 1.6rem);
+}
+.fa-room-heading .fa-room-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fa-accent);
+  font-size: .83rem;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.fa-room-heading p { color: var(--fa-muted); font-size: .77rem; }
+.fa-room-heading .fa-badge { flex: none; }
+.fa-room-heading + .fa-section { margin-block-start: 12px; }
+
+.fa-flight-shell .fa-room-nav {
+  position: fixed;
+  z-index: 5;
+  inset: auto 0 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  width: min(100%, 680px);
+  min-height: var(--fa-room-nav-height);
+  margin-inline: auto;
+  padding: 4px max(5px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(5px, env(safe-area-inset-left, 0px));
+  border: 1px solid var(--fa-line);
+  border-radius: 14px 14px 0 0;
+  background: var(--fa-surface);
+  box-shadow: 0 -5px 22px #142f4d10;
+}
+.fa-room-nav > a, .fa-room-more > .fa-more-trigger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  min-height: 48px;
+  padding: 4px 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--fa-muted);
+  font-weight: 800;
+  font-size: .7rem;
+  line-height: 1.1;
+}
+.fa-room-nav > a:is(:hover, [aria-current]),
+.fa-room-more > .fa-more-trigger:is(:hover, [aria-expanded='true']),
+.fa-room-more-current > .fa-more-trigger {
+  color: var(--fa-ink);
+  background: var(--fa-soft);
+  border-color: var(--fa-line);
+}
+.fa-room-nav > a svg, .fa-room-more > .fa-more-trigger svg { flex: none; color: var(--fa-accent); }
+.fa-flight-shell .fa-room-nav > a:focus-visible, .fa-flight-shell .fa-room-more > .fa-more-trigger:focus-visible { outline-offset: -2px; }
+.fa-room-more { position: relative; display: grid; min-width: 0; }
+.fa-room-more > .fa-more-trigger { width: 100%; height: auto; }
+.fa-room-more > .fa-more-trigger > span { display: inline; }
+.fa-room-more .fa-more-unread { inset-inline-end: calc(50% - 14px); }
+.fa-room-more > .fa-more-panel {
+  inset: auto 0 calc(100% + 8px) auto;
+  width: min(235px, calc(100vw - 32px));
+  min-width: 0;
+  max-height: calc(100dvh - var(--fa-room-nav-height) - env(safe-area-inset-top, 0px) - 14px);
+  overflow-y: auto;
+}
+.fa-room-more .fa-more-item:focus-visible { outline-offset: -2px; }
+.fa-room-more .fa-more-item[aria-current] { background: var(--fa-soft); }

@@ -18,15 +18,15 @@ export function startConversation(flightId: string, passengerId: string) {
   return api<Conversation>(`flights/${flightId}/conversations`, {method: 'POST', body: {passengerId}});
 }
 
-export function ConversationList({flightId}: {flightId?: string}) {
+function ConversationList() {
   const [page, setPage] = useState(1);
-  const result = useResource<Page<Conversation>>(`conversations?${new URLSearchParams({page: String(page), ...(flightId ? {flightId} : {})})}`);
+  const result = useResource<Page<Conversation>>(`conversations?page=${page}`);
   useRealtime({connect: result.reload, 'conversation:updated': result.reload, 'conversations:updated': result.reload, 'flight:updated': result.reload});
   return <section className="fa-section">
-    <div className="fa-section-head"><div><Eyebrow>DIRECT MESSAGES</Eyebrow>{flightId ? <h2>Messages</h2> : <h1>Messages</h1>}<p className="fa-muted">One private chat per traveller, for flights, baggage or airport cabs.</p></div></div>
+    <div className="fa-section-head"><div><Eyebrow>DIRECT MESSAGES</Eyebrow><h1>Messages</h1><p className="fa-muted">One private chat per traveller, for flights, baggage or airport cabs.</p></div></div>
     <ErrorMessage error={result.error} retry={result.reload} />
     {!result.data && !result.error && <Loading label="Loading conversations…" />}
-    {result.data?.items.length === 0 && <Empty icon={MessageCircle} title="No conversations yet"><p>Select Message next to a passenger to start a private conversation.</p><Link className="fa-link" href={flightId ? `/flights/${flightId}?tab=passengers` : '/dashboard'}>{flightId ? 'See passengers' : 'See my flights'} <ChevronRight size={15} aria-hidden="true" /></Link></Empty>}
+    {result.data?.items.length === 0 && <Empty icon={MessageCircle} title="No conversations yet"><p>Select Message next to a passenger to start a private conversation.</p><Link className="fa-link" href="/dashboard">See my flights <ChevronRight size={15} aria-hidden="true" /></Link></Empty>}
     {!!result.data?.items.length && <ul className="fa-inbox">{result.data.items.map((conversation) => <li key={conversation.id}><Link href={`/dashboard/messages/${conversation.id}`}>
       <span className="fa-avatar"><UserRound size={20} aria-hidden="true" /></span><span className="fa-inbox-body"><strong>{conversation.participant.displayName}</strong><span>{conversation.lastMessage ? `${conversation.lastMessage.isOwn ? 'You: ' : ''}${conversation.lastMessage.content}` : 'No messages yet'}</span></span><span className="fa-inbox-meta">{conversation.lastMessage && <time dateTime={conversation.lastMessage.createdAt}>{formatTime(conversation.lastMessage.createdAt)}</time>}{conversation.unreadCount > 0 && <span className="fa-count" aria-label={`${conversation.unreadCount} unread`}>{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</span>}</span><ChevronRight size={18} aria-hidden="true" />
     </Link></li>)}</ul>}
@@ -335,7 +335,7 @@ function Thread({conversation, refresh}: {conversation: Conversation; refresh: (
       </div>
       <details className="fa-thread-safety"><summary className="fa-icon-button" aria-label="Safety options" title="Safety options"><ShieldCheck size={20} aria-hidden="true" /></summary><div className="fa-thread-safety-panel">
         <p>Keep booking references, identity documents and payment details out of chat. If you meet, choose a public place at the airport.</p>
-        <Link className="fa-link" href={`/flights/${conversation.flightId}?tab=messages`}>Back to flight room <ChevronRight size={14} aria-hidden="true" /></Link>
+        <Link className="fa-link" href={`/flights/${conversation.flightId}`}>Back to flight room <ChevronRight size={14} aria-hidden="true" /></Link>
         <ThreadSafety conversation={conversation} onBlocked={blocked} />
       </div></details>
     </div>

@@ -11,9 +11,9 @@ export const viewport: Viewport = {
 };
 
 const steps = [
-  { icon: Plane, title: "Find your flight", text: "Start with your flight details, including your departure airport and scheduled takeoff." },
-  { icon: SlidersHorizontal, title: "Choose what to share", text: "Set your travel preferences. If you’re exploring baggage matches, add your allowance and estimated bag weight." },
-  { icon: MessageCircle, title: "Make a plan together", text: "Agree on a pickup spot and time for a ride, or check with your airline before making any baggage plans." },
+  { icon: Plane, title: "Find your flight", text: "Join your flight room using your itinerary. For example, a trip from Delhi (DEL) to Bengaluru (BLR)." },
+  { icon: SlidersHorizontal, title: "Choose what to share", text: "Post or request seats in Share a cab, or add your allowance and estimated weight in Baggage matches." },
+  { icon: MessageCircle, title: "Make a plan together", text: "Once a host accepts your seat request, use the private chat to coordinate. For baggage, both travellers must agree to a match and check with their airline." },
 ];
 
 const safetyFeatures = [
@@ -23,11 +23,11 @@ const safetyFeatures = [
 ];
 
 const faqs = [
-  { id: "ride-faq", question: "Do we need to be on the same flight to share a ride?", answer: "No. Ride matches are for trips to the same departure airport, with scheduled takeoff times no more than 20 minutes apart (±20 minutes from yours). You can be on different flights or flying to different destinations. This is not a ride from the airport after you land." },
-  { question: "How do we agree on pickup and timing?", answer: "Start with a general area, such as a neighborhood or a nearby transit station. If you decide to ride together, agree on a public pickup point, a time, your terminal drop-offs, and how to split the fare. Allow enough time for check-in and security. Flight Share doesn’t book rides or handle payments." },
-  { id: "baggage-faq", question: "Who can be a baggage match?", answer: "Only passengers on your exact flight. A possible match compares one traveler’s estimated excess weight with another’s estimated spare allowance. A shared airport or a similar departure time isn’t enough." },
+  { id: "ride-faq", question: "Do we need to be on the same flight to share a ride?", answer: "No. Browse cab listings for the same departure airport. The search defaults to 20 minutes either side of your scheduled flight departure, and you can set it anywhere from 0 to 60 minutes. This is for rides to the airport, not from the airport after landing." },
+  { question: "How do we agree on pickup and timing?", answer: "Post a listing with a general pickup area, such as Dwarka in Delhi, or request seats in an existing listing. After the host accepts, agree on a public pickup point, pickup time, terminal drop-offs and fare split. Allow time for check-in and security. Flight Share doesn’t book rides or handle payments." },
+  { id: "baggage-faq", question: "Who can be a baggage match?", answer: "Only passengers on your exact flight. The Baggage matches section compares one traveller’s estimated excess weight with another’s estimated spare allowance. Both travellers must agree to confirm a match." },
   { question: "Does a baggage match let me carry someone else’s things?", answer: "No. Always pack and carry only your own belongings. Flight Share can’t transfer or approve baggage allowance. Only consider pooling allowance if your airline explicitly permits it for your booking and bags." },
-  { question: "Does Flight Share verify travelers or book anything?", answer: "No. Flight details entered by travelers don’t prove their identity, reservation, or boarding status. Flight Share doesn’t book flights or rides. Use your airline for reservations, changes, and official baggage rules." },
+  { question: "Does Flight Share verify travellers or book anything?", answer: "No. Flight details entered by travellers don’t prove their identity, reservation, or boarding status. Flight Share doesn’t book flights or rides. Use your airline for reservations, changes, and official baggage rules." },
 ];
 
 export default function HomePage() {
@@ -40,7 +40,7 @@ export default function HomePage() {
           <div className="fs-hero-copy">
             <p className="fs-kicker fs-hero-kicker"><span /> BEFORE TAKEOFF</p>
             <h1 id="hero-title">Share a ride. <span>Explore baggage matches.</span></h1>
-            <p className="fs-hero-description">Find travelers heading to your departure airport around the same time, or explore a possible baggage allowance match with someone on your exact flight.</p>
+            <p className="fs-hero-description">Offer or request cab seats to your departure airport, or explore a possible baggage allowance match with someone on your exact flight.</p>
             <div className="fs-hero-actions">
               <Link className="fs-button fs-button-dark" href="/onboarding">Find My Flight <ArrowUpRight size={19} aria-hidden="true" /></Link>
               <a className="fs-text-link" href="#travel-options">Explore both options <ArrowDown size={16} aria-hidden="true" /></a>
@@ -82,7 +82,7 @@ export default function HomePage() {
             <div className="fs-safety-copy">
               <p className="fs-kicker fs-section-kicker"><span /> PRIVACY &amp; SAFETY</p>
               <h2 id="safety-title">Your trip.<br /> Your boundaries.</h2>
-              <p className="fs-safety-intro">You choose what to share and whether to make plans with another traveler.</p>
+              <p className="fs-safety-intro">You choose what to share and whether to make plans with another traveller.</p>
               <Link className="fs-text-link fs-safety-link" href="/legal/privacy">See what others can view <ArrowUpRight size={17} aria-hidden="true" /></Link>
             </div>
             <ul className="fs-safety-features">

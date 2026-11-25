@@ -1,33 +1,32 @@
-import {Prisma} from '@prisma/client';
+import {Prisma, type Conversation, type ConversationContext} from '@prisma/client';
 import {prisma} from '../db';
 import {HttpError} from '../errors';
-import {rideWindowSql} from '../rides';
 
 export const conversationUnavailable = () => new HttpError(404, 'CONVERSATION_NOT_FOUND', 'This conversation is not available to you.');
 export const flightUnavailable = () => new HttpError(404, 'FLIGHT_NOT_FOUND', 'This flight room is not available to you.');
 
+// A context is valid only when both participants still belong to its respective flights.
+// Ride matching, listing capacity and opt-in are checked at authorization, not on later access.
+const activeContext = Prisma.sql`
+  ctx."conversationId" = c.id
+  AND EXISTS (SELECT 1 FROM "FlightMembership" m WHERE m."flightId" = ctx."flightOneId" AND m."userId" = c."participantOneId" AND m."isActive")
+  AND EXISTS (SELECT 1 FROM "FlightMembership" m WHERE m."flightId" = ctx."flightTwoId" AND m."userId" = c."participantTwoId" AND m."isActive")`;
+
+const viewerFlight = (userId: string) => Prisma.sql`
+  (CASE WHEN c."participantOneId" = ${userId} THEN ctx."flightOneId" ELSE ctx."flightTwoId" END)`;
+
 // Queries including this predicate must alias the conversation table as c.
-export const conversationScope = (userId: string) => Prisma.sql`
+export const conversationScope = (userId: string, flightId?: string) => Prisma.sql`
   (${userId} = c."participantOneId" OR ${userId} = c."participantTwoId")
-  AND EXISTS (SELECT 1 FROM "FlightMembership" m WHERE m."flightId" = c."flightId" AND m."userId" = c."participantOneId" AND m."isActive")
-  AND EXISTS (SELECT 1 FROM "FlightMembership" m WHERE m."flightId" = COALESCE(c."rideFlightId", c."flightId") AND m."userId" = c."participantTwoId" AND m."isActive")
-  AND (c."rideFlightId" IS NULL OR EXISTS (
-    SELECT 1 FROM "FlightMembership" m1 JOIN "Flight" f1 ON f1.id = m1."flightId"
-    JOIN "Flight" f2 ON f2.id = c."rideFlightId"
-    JOIN "FlightMembership" m2 ON m2."flightId" = f2.id AND m2."userId" = c."participantTwoId"
-    WHERE f1.id = c."flightId" AND m1."userId" = c."participantOneId"
-      AND m1."isActive" AND m2."isActive" AND m1."rideOptIn" AND m2."rideOptIn"
-      AND (${rideWindowSql('f1', 'f2')})
-  ))
+  AND EXISTS (SELECT 1 FROM "ConversationContext" ctx WHERE ${activeContext}
+    ${flightId ? Prisma.sql`AND ${viewerFlight(userId)} = ${flightId}` : Prisma.empty})
   AND NOT EXISTS (SELECT 1 FROM "UserBlock" b WHERE
     (b."blockerId" = c."participantOneId" AND b."blockedId" = c."participantTwoId") OR
     (b."blockerId" = c."participantTwoId" AND b."blockedId" = c."participantOneId"))`;
 
-export type ConversationRow = {id: string; flightId: string; rideFlightId: string | null; participantOneId: string; participantTwoId: string; createdAt: Date};
-
 export async function findVisibleConversation(userId: string, id: string, db: Prisma.TransactionClient = prisma) {
-  const [row] = await db.$queryRaw<ConversationRow[]>(Prisma.sql`
-    SELECT c.id, c."flightId", c."rideFlightId", c."participantOneId", c."participantTwoId", c."createdAt" FROM "Conversation" c
+  const [row] = await db.$queryRaw<Conversation[]>(Prisma.sql`
+    SELECT c.id, c."participantOneId", c."participantTwoId", c."createdAt" FROM "Conversation" c
     WHERE c.id = ${id} AND ${conversationScope(userId)}`);
   return row;
 }
@@ -38,10 +37,28 @@ export async function requireConversation(db: Prisma.TransactionClient, userId: 
   return c;
 }
 
-export const otherParticipant = (c: ConversationRow, userId: string) => c.participantOneId === userId ? c.participantTwoId : c.participantOneId;
-export const participantFlight = (c: ConversationRow, userId: string) => c.participantOneId === userId ? c.flightId : c.rideFlightId ?? c.flightId;
-// Queries including this expression must alias the conversation table as c.
-export const participantFlightSql = (userId: string) => Prisma.sql`(CASE WHEN c."participantOneId" = ${userId} THEN c."flightId" ELSE COALESCE(c."rideFlightId", c."flightId") END)`;
+export const otherParticipant = (c: Conversation, userId: string) => c.participantOneId === userId ? c.participantTwoId : c.participantOneId;
+
+export const participantFlight = (c: Conversation, context: ConversationContext, userId: string) =>
+  c.participantOneId === userId ? context.flightOneId : context.flightTwoId;
+
+// Call after requireConversation or with a thread already authorized in this transaction.
+export function activeConversationContexts(db: Prisma.TransactionClient, conversationId: string) {
+  return db.$queryRaw<ConversationContext[]>(Prisma.sql`
+    SELECT ctx.* FROM "Conversation" c JOIN "ConversationContext" ctx ON ${activeContext}
+    WHERE c.id = ${conversationId} ORDER BY ctx.ride DESC, ctx."createdAt" DESC, ctx.id DESC`);
+}
+
+// Includes inactive contexts so both participants can invalidate cached visibility after a leave.
+export async function conversationCounterparts(userId: string, flightId: string, db: Prisma.TransactionClient = prisma) {
+  const rows = await db.$queryRaw<{peerId: string}[]>(Prisma.sql`
+    SELECT c."participantTwoId" AS "peerId" FROM "ConversationContext" ctx JOIN "Conversation" c ON c.id = ctx."conversationId"
+    WHERE c."participantOneId" = ${userId} AND ctx."flightOneId" = ${flightId}
+    UNION
+    SELECT c."participantOneId" AS "peerId" FROM "ConversationContext" ctx JOIN "Conversation" c ON c.id = ctx."conversationId"
+    WHERE c."participantTwoId" = ${userId} AND ctx."flightTwoId" = ${flightId}`);
+  return [userId, ...rows.map(({peerId}) => peerId)];
+}
 
 export function isFlightMember(userId: string, flightId: string, db: Prisma.TransactionClient = prisma) {
   return db.flightMembership.findFirst({where: {flightId, userId, isActive: true}, select: {id: true}});
@@ -70,8 +87,9 @@ export async function socialWrite<T>(write: (db: Prisma.TransactionClient) => Pr
       return await prisma.$transaction(write, {isolationLevel: Prisma.TransactionIsolationLevel.Serializable});
     } catch (error) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || !['P2034', 'P2002'].includes(error.code)) throw error;
-      if (attempt >= 3) throw new HttpError(409, 'SOCIAL_CONFLICT', 'The conversation changed. Please try again.');
-      await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt + Math.random() * 10));
+      if (attempt >= 7) throw new HttpError(409, 'SOCIAL_CONFLICT', 'The details changed while saving. Please try again.');
+      const delay = Math.min(25 * 2 ** attempt, 400);
+      await new Promise((resolve) => setTimeout(resolve, delay / 2 + Math.random() * delay));
     }
   }
 }

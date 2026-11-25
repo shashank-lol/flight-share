@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Flight Share — Airport rides and same-flight baggage matches", template: "%s | Flight Share" },
-  description: "Find travelers heading to your departure airport around the same time, or explore potential baggage allowance matches with passengers on your exact flight.",
+  description: "Offer or request cab seats to your departure airport, or explore potential baggage allowance matches with travellers on your exact flight.",
   applicationName: "Flight Share",
 };
 
@@ -12,7 +12,7 @@ export const viewport: Viewport = { width: 'device-width', initialScale: 1, view
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en-IN" data-scroll-behavior="smooth">
       <body>{children}</body>
     </html>
   );

@@ -19,25 +19,33 @@ test('home to flight room without email: manual flight, preferences and baggage 
   try {
     await expectFlightEntry(page);
     await page.getByRole('button', {name: 'Manual entry', exact: true}).click();
-    await page.getByLabel('Airline code').fill('DL');
-    await page.getByLabel('Flight number').fill('1437');
-    await page.getByLabel('Departure airport').fill('JFK');
-    await page.getByLabel('Arrival airport').fill('SEA');
+    await page.getByLabel('Airline code').fill('AI');
+    await page.getByLabel('Flight number').fill('505');
+    await page.getByLabel('Departure airport').fill('DEL');
+    await page.getByLabel('Arrival airport').fill('BLR');
     await page.getByLabel('Departure date').fill(new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10));
-    await page.getByLabel('Departure time', {exact: false}).fill('14:35');
+    await page.getByLabel('Departure time', {exact: false}).fill('08:45');
     await page.getByRole('button', {name: 'Find my flight'}).click();
     await expect(page.getByRole('heading', {name: 'Make the room yours.'})).toBeVisible();
-    await page.getByRole('textbox', {name: 'Display name', exact: true}).fill('Taylor Test');
+    await page.getByRole('textbox', {name: 'Display name', exact: true}).fill('Arjun Mehta');
     await page.getByRole('switch', {name: /Show me as anonymous/}).check();
-    await page.getByLabel('Baggage allowance (kg)').fill('20');
-    await page.getByLabel('Expected baggage weight (kg)').fill('23');
+    await expect(page.getByLabel('Baggage allowance (kg)')).toHaveCount(0);
     await page.getByRole('button', {name: 'Join flight room'}).click();
     await expect(page).toHaveURL(/\/flights\/[0-9a-f-]+$/);
-    await expect(page.getByRole('heading', {name: 'DL 1437 flight room'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
+    await expect(page.getByRole('navigation', {name: 'Flight sections'}).getByRole('link', {name: 'Group chat'})).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByText('Your baggage', {exact: true})).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', {name: 'DL 1437 flight room'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
+    await page.getByRole('textbox', {name: 'Your message'}).fill('Namaste! See you at the gate.');
+    await page.getByRole('button', {name: 'Send message'}).click();
+    await expect(page.getByRole('log').getByText('Namaste! See you at the gate.')).toBeVisible();
+    await page.getByRole('link', {name: 'Passengers', exact: true}).click();
     await expect(page.getByText('Anonymous Traveller (you)')).toBeVisible();
-    await page.getByRole('button', {name: 'Edit baggage'}).click();
+    await expect(page.getByText('Your baggage', {exact: true})).toHaveCount(0);
+    await page.getByRole('link', {name: 'Baggage matches', exact: true}).click();
+    await page.getByRole('button', {name: 'Add baggage'}).click();
+    await page.getByRole('dialog').getByLabel('Baggage allowance (kg)', {exact: true}).fill('20');
     await page.getByRole('dialog').getByLabel('Expected baggage weight (kg)').fill('19');
     await page.getByRole('button', {name: 'Save baggage'}).click();
     await expect(page.getByText('Baggage updated')).toBeVisible();
@@ -52,23 +60,32 @@ test('mobile demo booking is clearly labeled and rejects horizontal overflow', a
   await page.goto('/onboarding');
   try {
     await expectFlightEntry(page);
-    await page.getByLabel('Flight code').fill('BA 117');
+    await page.getByLabel('Flight code').fill('6E 203');
     await page.getByLabel('Departure date').fill(new Date(Date.now() + 11 * 86_400_000).toISOString().slice(0, 10));
     await page.getByRole('button', {name: 'Search flights'}).click();
     await expect(page.getByRole('heading', {name: 'Choose your flight'})).toBeVisible();
-    await page.getByRole('button', {name: /BA 117, LHR to JFK/}).click();
+    await page.getByRole('button', {name: /6E 203, DEL to BOM/}).click();
     await expect(page.getByRole('heading', {name: 'Make the room yours.'})).toBeVisible();
     await expect(page.getByText(/mock|demo booking/i).last()).toBeVisible();
-    await page.getByRole('textbox', {name: 'Display name', exact: true}).fill('Demo Guest');
+    await page.getByRole('button', {name: 'Use Aanya', exact: true}).click();
     await page.getByRole('button', {name: 'Join flight room'}).click();
     await expect(page).toHaveURL(/\/flights\/[0-9a-f-]+$/);
+    await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
+    const bottomNav = page.getByRole('navigation', {name: 'Flight sections'});
+    await expect(bottomNav.getByRole('link')).toHaveCount(6);
+    const bounds = await bottomNav.boundingBox();
+    const composer = await page.getByRole('textbox', {name: 'Your message'}).boundingBox();
+    expect(bounds!.height).toBeLessThan(72);
+    expect(bounds!.y + bounds!.height).toBeCloseTo(844, 0);
+    expect(composer!.y + composer!.height).toBeLessThan(bounds!.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const profile = await page.request.get('/api/v1/profile');
     expect((await profile.json()).data.flyer.points).toBe(0);
     await page.goto('/onboarding?add=1');
     await page.getByRole('button', {name: 'Demo booking'}).click();
     await expect(page.getByText(/Do not enter real booking details/)).toBeVisible();
     await page.getByLabel('Demo booking reference').fill('DEMO12');
-    await page.getByLabel('Demo surname').fill('Traveller');
+    await page.getByLabel('Demo surname').fill('Sharma');
     await page.getByRole('button', {name: 'Find my flight'}).click();
     await expect(page.getByRole('heading', {name: 'Make the room yours.'})).toBeVisible();
     await expect(page.getByText(/mock|demo booking/i).last()).toBeVisible();
@@ -88,34 +105,36 @@ test('pasted ticket stays local until reviewed and can join without reporting ba
     });
 
     await page.getByRole('button', {name: 'Paste ticket'}).click();
-    await page.getByLabel('Ticket text').fill(`Passenger: PRIVATE-SURNAME/ALEX\nBooking reference: ZXQ456\nFlight VA 883\nSYD → MEL\nDeparture: ${departureDate} 17:40`);
+    await page.getByLabel('Ticket text').fill(`Passenger: PRIVATE-SURNAME/PRIYA\nBooking reference: ZXQ456\nFlight 6E 203\nDEL → BOM\nDeparture: ${departureDate} 08:25`);
     await page.getByRole('button', {name: 'Import ticket'}).click();
     await expect(page.getByText(/Ticket text cleared/)).toBeVisible();
     await expect(page.getByRole('button', {name: 'Manual entry', exact: true})).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByLabel('Airline code')).toHaveValue('VA');
-    await expect(page.getByLabel('Flight number')).toHaveValue('883');
-    await expect(page.getByLabel('Departure airport')).toHaveValue('SYD');
-    await expect(page.getByLabel('Arrival airport')).toHaveValue('MEL');
+    await expect(page.getByLabel('Airline code')).toHaveValue('6E');
+    await expect(page.getByLabel('Flight number')).toHaveValue('203');
+    await expect(page.getByLabel('Departure airport')).toHaveValue('DEL');
+    await expect(page.getByLabel('Arrival airport')).toHaveValue('BOM');
     await expect(page.getByLabel('Departure date')).toHaveValue(departureDate);
-    await expect(page.getByLabel('Departure time')).toHaveValue('17:40');
+    await expect(page.getByLabel('Departure time')).toHaveValue('08:25');
     expect(writes).toEqual([]);
 
     await page.getByRole('button', {name: 'Find my flight'}).click();
     const displayName = page.getByRole('textbox', {name: 'Display name', exact: true});
     await expect(displayName).toHaveValue('');
-    await page.getByRole('button', {name: 'Use Alex', exact: true}).click();
-    await expect(displayName).toHaveValue('Alex');
+    await page.getByRole('button', {name: 'Use Priya', exact: true}).click();
+    await expect(displayName).toHaveValue('Priya');
     await page.getByRole('button', {name: 'Join flight room'}).click();
-    await expect(page.getByRole('heading', {name: 'VA 883 flight room'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Group chat', exact: true})).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Add baggage'})).toHaveCount(0);
+    await page.getByRole('link', {name: 'Baggage matches', exact: true}).click();
     await expect(page.getByRole('button', {name: 'Add baggage'})).toBeVisible();
 
     expect(writes.map(({path}) => path)).toEqual(['/api/v1/flights/verify', '/api/v1/auth/guest', '/api/v1/flights/verify', '/api/v1/flights/join']);
-    const itinerary = {method: 'manual', airline: 'VA', flightNumber: '883', departureAirport: 'SYD', arrivalAirport: 'MEL', departureDate, departureTime: '17:40'};
+    const itinerary = {method: 'manual', airline: '6E', flightNumber: '203', departureAirport: 'DEL', arrivalAirport: 'BOM', departureDate, departureTime: '08:25'};
     expect(JSON.parse(writes[0].body ?? '{}')).toEqual(itinerary);
     expect(JSON.parse(writes[1].body ?? '{}')).toEqual({});
     expect(JSON.parse(writes[2].body ?? '{}')).toEqual(itinerary);
     const join = JSON.parse(writes[3].body ?? '{}');
-    expect(join.displayName).toBe('Alex');
+    expect(join.displayName).toBe('Priya');
     expect(join).not.toHaveProperty('baggageAllowance');
     expect(join).not.toHaveProperty('expectedBaggageWeight');
     for (const {body} of writes) expect(body).not.toMatch(/PRIVATE-SURNAME|ZXQ456/i);
@@ -128,26 +147,26 @@ test('published schedule moves a guest to profile setup and an outage preserves 
     const response = await route.fetch();
     if (!response.ok()) { await route.fulfill({response}); return; }
     const code = new URL(route.request().url()).searchParams.get('code');
-    await route.fulfill({json: {data: {liveEnabled: true, liveError: code !== 'AS2223', items: code !== 'AS2223' ? [] : [
-      {source: 'SCHEDULE', flight: {airline: 'AS', flightNumber: '2223', departureAirport: 'SEA', arrivalAirport: 'PDX', departureDate: date, departureTime: '13:00'}},
+    await route.fulfill({json: {data: {liveEnabled: true, liveError: code !== 'AI505', items: code !== 'AI505' ? [] : [
+      {source: 'SCHEDULE', flight: {airline: 'AI', flightNumber: '505', departureAirport: 'DEL', arrivalAirport: 'BLR', departureDate: date, departureTime: '08:45'}},
     ]}}});
   });
   await page.goto('/onboarding');
   try {
     await expectFlightEntry(page);
-    await page.getByLabel('Flight code').fill('AS2223');
+    await page.getByLabel('Flight code').fill('AI505');
     await page.getByLabel('Departure date').fill(date);
     await page.getByRole('button', {name: 'Search flights'}).click();
     await expect(page.getByText('Published schedule', {exact: true})).toBeVisible();
-    await page.getByRole('button', {name: /AS 2223, SEA to PDX/}).click();
+    await page.getByRole('button', {name: /AI 505, DEL to BLR/}).click();
     await expect(page.getByRole('heading', {name: 'Make the room yours.'})).toBeVisible();
     await expect(page.getByText('Self-reported', {exact: true})).toBeVisible();
     await page.getByRole('button', {name: 'Edit flight'}).click();
-    await page.getByLabel('Flight code').fill('AS2224');
+    await page.getByLabel('Flight code').fill('AI504');
     await page.getByRole('button', {name: 'Search flights'}).click();
     await expect(page.getByText(/Live schedules are temporarily unavailable/)).toBeVisible();
     await page.getByRole('button', {name: 'Enter flight details manually'}).click();
-    await expect(page.getByLabel('Flight number')).toHaveValue('2224');
+    await expect(page.getByLabel('Flight number')).toHaveValue('504');
     await expect(page.getByLabel('Departure date')).toHaveValue(date);
   } finally { await cleanup(page); }
 });

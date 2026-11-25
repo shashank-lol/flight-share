@@ -13,7 +13,7 @@
 
 @supports (height: 100dvh) { .fa-thread { --chat-viewport: 100dvh; } }
 
-.fa-thread-group { margin-block-start: 15px; height: clamp(310px, calc(var(--chat-viewport) - 84px), 720px); }
+.fa-thread-group { height: clamp(235px, calc(var(--chat-viewport) - 175px - var(--fa-room-nav-height) - env(safe-area-inset-top, 0px)), 840px); }
 .fa-thread-header { position: relative; z-index: 2; padding: 12px 16px; border-bottom: 1px solid var(--fa-line); }
 .fa-thread-heading-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .fa-thread-back { background: transparent; }
@@ -24,8 +24,8 @@
 .fa-thread-status > span { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #aa713c; }
 .fa-thread-status > .is-live { background: #357743; }
 .fa-thread-status > button { min-height: 22px; font-size: inherit; }
-.fa-thread-audience, .fa-thread-confirm { margin-block-start: 7px; color: var(--fa-muted); font-size: .8rem; }
-.fa-thread-ride-label { margin-inline-start: .5em; font-size: .7rem; font-weight: 700; color: var(--fa-accent); }
+.fa-thread-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; color: var(--fa-muted); font-size: .73rem; }
+.fa-thread-confirm { margin-block-start: 7px; color: var(--fa-muted); font-size: .8rem; }
 .fa-thread-safety { flex: none; }
 .fa-thread-safety summary { list-style: none; }
 .fa-thread-safety summary::-webkit-details-marker { display: none; }
@@ -71,6 +71,7 @@
 .fa-thread-jump { position: absolute; inset: auto 16px 10px auto; box-shadow: 0 4px 10px #142f4d20; }
 
 .fa-thread-composer { display: grid; gap: 5px; padding: 9px 14px; padding-block-end: max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--fa-line); }
+.fa-thread-group .fa-thread-composer { padding-block-end: 9px; }
 .fa-thread-compose-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
 .fa-thread-compose-row textarea {
   width: 100%;
@@ -91,7 +92,7 @@
 
 @media (max-width: 730px) {
   .fa-thread-private { height: clamp(260px, calc(var(--chat-viewport) - 143px), 720px); }
-  .fa-thread-group { height: clamp(245px, calc(var(--chat-viewport) - 40px), 720px); }
+  .fa-thread-group { height: clamp(200px, calc(var(--chat-viewport) - 133px - var(--fa-room-nav-height) - env(safe-area-inset-top, 0px)), 840px); }
   .fa-thread-header { padding: 9px 10px; }
   .fa-thread-header .fa-avatar { width: 34px; height: 34px; }
   .fa-thread-heading-main { gap: 6px; }

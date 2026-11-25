@@ -34,17 +34,15 @@ export const profileSchema = z.object({
 }).strict();
 const kg = z.number().min(0).max(250).refine((weight) => Math.abs(weight * 100 - Math.round(weight * 100)) < 0.00001);
 const weightsSchema = z.object({baggageAllowance: kg, expectedBaggageWeight: kg, cabinBaggage: cleanText(120).nullable().optional()});
-const pickupArea = cleanText(60).refine((value) => /^[\p{L}\p{M}\d .,’'()\-]+$/u.test(value) && !/^\d/.test(value)).nullable().optional();
 const partySize = z.number().int().min(1).max(12);
-export const rideSettingsSchema = z.object({partySize, rideOptIn: z.boolean(), pickupArea, departureTime: tripTimeSchema.optional()}).strict();
 export const joinFlightSchema = profileSchema.extend({
   ...weightsSchema.partial().shape, token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  partySize: partySize.default(1), rideOptIn: z.boolean().default(false), pickupArea,
+  partySize: partySize.optional(),
 }).refine((entry) => (entry.baggageAllowance === undefined) === (entry.expectedBaggageWeight === undefined), {path: ['expectedBaggageWeight']});
 export const editProfileSchema = z.object(profileFields).partial().strict();
 export const baggageSchema = weightsSchema.partial().extend({flightId: idSchema}).strict().refine(({baggageAllowance, expectedBaggageWeight, cabinBaggage}) => baggageAllowance !== undefined || expectedBaggageWeight !== undefined || cabinBaggage !== undefined);
 export const directorySchema = z.object({
-  filter: z.enum(['all', 'excess', 'available', 'cab', 'companions']).default('all'),
-  sort: z.enum(['recent', 'name', 'baggage']).default('recent'),
+  filter: z.enum(['all', 'cab', 'companions']).default('all'),
+  sort: z.enum(['recent', 'name']).default('recent'),
   q: z.string().trim().max(48).default(''), page: z.coerce.number().int().min(1).max(1000).default(1),
 });

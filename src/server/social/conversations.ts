@@ -1,7 +1,6 @@
-import {Prisma, type Message} from '@prisma/client';
+import {Prisma, type Conversation, type Message} from '@prisma/client';
 import {HttpError} from '../errors';
-import {requireRidePeer} from '../rides';
-import {blockBetween, conversationScope, conversationUnavailable, flightUnavailable, isFlightMember, otherParticipant, participantFlight, participantFlightSql, peerUnavailable, requireConversation, requirePeer, socialRead, socialWrite, type ConversationRow} from './access';
+import {activeConversationContexts, blockBetween, conversationScope, conversationUnavailable, flightUnavailable, isFlightMember, otherParticipant, participantFlight, peerUnavailable, requireConversation, requirePeer, socialRead, socialWrite} from './access';
 import {publishUpdates} from './events';
 import {before, messagePage, MESSAGE_PAGE_SIZE, recentFirst, type MessageCursor} from './message-page';
 
@@ -10,11 +9,15 @@ function messageDto(m: Message, userId: string) {
   return {id: m.id, conversationId: m.conversationId, clientId: m.clientId, content: m.content, isOwn: m.senderId === userId, createdAt: m.createdAt, readAt: m.readAt};
 }
 
-async function conversationDto(db: Prisma.TransactionClient, c: ConversationRow, userId: string) {
+async function conversationDto(db: Prisma.TransactionClient, c: Conversation, userId: string, flightId?: string) {
   const peerId = otherParticipant(c, userId);
-  const peerFlightId = participantFlight(c, peerId);
+  const contexts = (await activeConversationContexts(db, c.id)).map((context) => ({
+    id: context.id, flightId: participantFlight(c, context, userId), peerFlightId: participantFlight(c, context, peerId), ride: context.ride,
+  }));
+  const context = flightId ? contexts.find((item) => item.flightId === flightId) : contexts[0];
+  if (!context) throw conversationUnavailable();
   const [member, lastMessage, unreadCount] = await Promise.all([
-    db.flightMembership.findUniqueOrThrow({where: {flightId_userId: {flightId: peerFlightId, userId: peerId}}, select: {
+    db.flightMembership.findUniqueOrThrow({where: {flightId_userId: {flightId: context.peerFlightId, userId: peerId}}, select: {
       id: true, alias: true, user: {select: {profile: {select: {displayName: true, isAnonymous: true}}}},
     }}),
     db.message.findFirst({where: {conversationId: c.id}, orderBy: [...recentFirst]}),
@@ -22,35 +25,44 @@ async function conversationDto(db: Prisma.TransactionClient, c: ConversationRow,
   ]);
   const profile = member.user.profile;
   const isAnonymous = profile?.isAnonymous ?? true;
-  return {id: c.id, flightId: participantFlight(c, userId), rideFlightId: c.rideFlightId ? peerFlightId : null, createdAt: c.createdAt, participant: {
+  return {id: c.id, flightId: context.flightId, rideFlightId: context.ride ? context.peerFlightId : null, contexts, createdAt: c.createdAt, participant: {
     id: member.id, displayName: isAnonymous || !profile ? `Anonymous Traveller · ${member.alias}` : profile.displayName, isAnonymous,
   }, lastMessage: lastMessage ? messageDto(lastMessage, userId) : null, unreadCount};
 }
 
-export function conversationUpdates(c: ConversationRow) {
+export function conversationUpdates(c: Conversation) {
   return [c.participantOneId, c.participantTwoId].map((userId) => ({userId, event: 'conversation:updated', payload: {conversationId: c.id}}));
 }
 
-async function open(userId: string, fromFlightId: string, passengerId: string, ride: boolean) {
+// Only call inside a transaction after authorizing the same-flight, baggage, or cab workflow.
+// Recheck safety here, regardless of what the caller checked while granting the context.
+export async function ensureConversation(db: Prisma.TransactionClient, userId: string, fromFlightId: string, peerId: string, peerFlightId: string, ride = false): Promise<Conversation> {
+  if (peerId === userId || (!ride && fromFlightId !== peerFlightId)) throw peerUnavailable();
+  const [member, peer, block] = await Promise.all([
+    isFlightMember(userId, fromFlightId, db),
+    isFlightMember(peerId, peerFlightId, db),
+    db.userBlock.findFirst({where: blockBetween(userId, peerId), select: {id: true}}),
+  ]);
+  if (!member || !peer || block) throw peerUnavailable();
+
+  const [participantOneId, participantTwoId] = [userId, peerId].sort();
+  const pair = {participantOneId, participantTwoId};
+  const c = await db.conversation.upsert({where: {participantOneId_participantTwoId: pair}, create: pair, update: {}});
+  const [flightOneId, flightTwoId] = participantOneId === userId ? [fromFlightId, peerFlightId] : [peerFlightId, fromFlightId];
+  const key = {conversationId: c.id, flightOneId, flightTwoId};
+  await db.conversationContext.upsert({where: {conversationId_flightOneId_flightTwoId: key}, create: {...key, ride}, update: ride ? {ride: true} : {}});
+  return c;
+}
+
+export async function openConversation(userId: string, flightId: string, passengerId: string) {
   const {c, dto} = await socialWrite(async (db) => {
-    const {peerUserId: peerId, peerFlightId} = ride ? await requireRidePeer(db, userId, passengerId, fromFlightId) : {
-      peerUserId: await requirePeer(db, userId, fromFlightId, passengerId), peerFlightId: fromFlightId,
-    };
-    if (peerId === userId || await db.userBlock.findFirst({where: blockBetween(userId, peerId), select: {id: true}})) throw peerUnavailable();
-    const [participantOneId, participantTwoId] = [userId, peerId].sort();
-    // Sort participants, then keep each flight paired with its participant.
-    const flightId = participantOneId === userId ? fromFlightId : peerFlightId;
-    const rideFlightId = ride ? (participantTwoId === userId ? fromFlightId : peerFlightId) : null;
-    const scopeKey = rideFlightId ? `ride:${flightId}:${rideFlightId}:${participantOneId}:${participantTwoId}` : `${flightId}:${participantOneId}:${participantTwoId}`;
-    const c = await db.conversation.upsert({where: {scopeKey}, create: {scopeKey, flightId, rideFlightId, participantOneId, participantTwoId}, update: {}});
-    return {c, dto: await conversationDto(db, c, userId)};
+    const peerId = await requirePeer(db, userId, flightId, passengerId);
+    const c = await ensureConversation(db, userId, flightId, peerId, flightId);
+    return {c, dto: await conversationDto(db, c, userId, flightId)};
   });
   await publishUpdates(conversationUpdates(c));
   return dto;
 }
-
-export const openConversation = (userId: string, flightId: string, passengerId: string) => open(userId, flightId, passengerId, false);
-export const openRideConversation = (userId: string, flightId: string, passengerId: string) => open(userId, flightId, passengerId, true);
 
 export function getConversation(userId: string, id: string) {
   return socialRead(async (db) => conversationDto(db, await requireConversation(db, userId, id), userId));
@@ -59,17 +71,17 @@ export function getConversation(userId: string, id: string) {
 export function listConversations(userId: string, page: number, flightId?: string) {
   return socialRead(async (db) => {
     if (flightId && !await isFlightMember(userId, flightId, db)) throw flightUnavailable();
-    const rows = await db.$queryRaw<ConversationRow[]>(Prisma.sql`
-      SELECT c.id, c."flightId", c."rideFlightId", c."participantOneId", c."participantTwoId", c."createdAt"
+    const rows = await db.$queryRaw<Conversation[]>(Prisma.sql`
+      SELECT c.id, c."participantOneId", c."participantTwoId", c."createdAt"
       FROM "Conversation" c
       LEFT JOIN LATERAL (
         SELECT m."createdAt" FROM "Message" m WHERE m."conversationId" = c.id
         ORDER BY m."createdAt" DESC, m.id DESC LIMIT 1
       ) recent ON true
-      WHERE ${conversationScope(userId)} ${flightId ? Prisma.sql`AND ${participantFlightSql(userId)} = ${flightId}` : Prisma.empty}
+      WHERE ${conversationScope(userId, flightId)}
       ORDER BY COALESCE(recent."createdAt", c."createdAt") DESC, c.id DESC
       LIMIT ${PAGE_SIZE + 1} OFFSET ${(page - 1) * PAGE_SIZE}`);
-    const items = await Promise.all(rows.slice(0, PAGE_SIZE).map((row) => conversationDto(db, row, userId)));
+    const items = await Promise.all(rows.slice(0, PAGE_SIZE).map((row) => conversationDto(db, row, userId, flightId)));
     return {items, page, hasMore: rows.length > PAGE_SIZE};
   });
 }
@@ -94,7 +106,7 @@ export async function sendMessage(userId: string, conversationId: string, client
     }
     const m = await db.message.create({data: {...key, content}});
     const peerId = otherParticipant(c, userId);
-    await db.notification.create({data: {userId: peerId, type: 'NEW_MESSAGE', payload: {conversationId, flightId: participantFlight(c, peerId)}}});
+    await db.notification.create({data: {userId: peerId, type: 'NEW_MESSAGE', payload: {conversationId}}});
     return {m, c, sent: true};
   });
   if (sent) await publishUpdates([...conversationUpdates(c), {userId: otherParticipant(c, userId), event: 'notification:new', payload: {}}]);

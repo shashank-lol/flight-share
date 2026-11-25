@@ -62,13 +62,20 @@ test('real API: guest sessions, isolated rooms, private profiles, matches, messa
   assert.notEqual(await join(outsider.session, {displayName: 'Other Flight', weight: 12, otherDate: true}), flightId);
   const room = `flights/${flightId}`;
   assert.equal((await call(room, 'GET', undefined, outsider.session)).status, 404);
-  const passengers = await call(`${room}/passengers?filter=available`, 'GET', undefined, a.session);
+  const passengers = await call(`${room}/passengers`, 'GET', undefined, a.session);
   assert.equal(passengers.status, 200);
-  assert.equal(passengers.data.items.length, 1);
-  const peer = passengers.data.items[0];
+  assert.equal(passengers.data.items.length, 2);
+  assert.equal((await call(`${room}/passengers?filter=available`, 'GET', undefined, a.session)).status, 400);
+  assert.equal((await call(`${room}/passengers?sort=baggage`, 'GET', undefined, a.session)).status, 400);
+  const peer = passengers.data.items.find((item: {isSelf: boolean}) => !item.isSelf);
   assert.equal(peer.displayName, 'Anonymous Traveller');
   assert.ok(peer.alias);
-  assert.equal(peer.remainingWeight, 8);
+  assert.doesNotMatch(JSON.stringify(passengers.data), /baggageAllowance|expectedBaggageWeight|remainingWeight|cabinBaggage|baggageReported/);
+  const roomData = await call(room, 'GET', undefined, a.session);
+  assert.doesNotMatch(JSON.stringify(roomData.data.membership), /baggageAllowance|expectedBaggageWeight|cabinBaggage|baggageReported/);
+  assert.equal((await call(`profile/baggage?flightId=${flightId}`, 'GET', undefined, outsider.session)).status, 404);
+  assert.deepEqual((await call(`profile/baggage?flightId=${flightId}`, 'GET', undefined, a.session)).data,
+    {baggageAllowance: 20, expectedBaggageWeight: 23, cabinBaggage: null, baggageReported: true});
   assert.doesNotMatch(JSON.stringify(passengers.data), /Hidden Test Name|@example\.test/);
   const matches = await call(`${room}/matches`, 'GET', undefined, a.session);
   assert.equal(matches.data.items[0].potentialWeight, 3);
@@ -78,10 +85,10 @@ test('real API: guest sessions, isolated rooms, private profiles, matches, messa
   assert.equal((await call('profile', 'PATCH', {showBaggage: false, showTravelPreferences: false}, b.session)).status, 200);
   assert.equal((await call('profile', 'PATCH', {displayName: 'Still Private'}, b.session)).data.isAnonymous, true);
   const hidden = (await call(`${room}/passengers`, 'GET', undefined, a.session)).data.items.find((item: {id: string}) => item.id === peer.id);
-  assert.equal(hidden.baggageAllowance, null);
+  assert.equal('baggageAllowance' in hidden, false);
   assert.equal(hidden.transportation, null);
   assert.equal((await call(`${room}/matches`, 'GET', undefined, a.session)).data.items.length, 0);
-  assert.equal((await call('profile/baggage', 'PATCH', {flightId, expectedBaggageWeight: 22.5}, a.session)).data.membership.expectedBaggageWeight, 22.5);
+  assert.equal((await call('profile/baggage', 'PATCH', {flightId, expectedBaggageWeight: 22.5}, a.session)).data.expectedBaggageWeight, 22.5);
 
   const opened = await call(`${room}/conversations`, 'POST', {passengerId: peer.id}, a.session);
   assert.equal(opened.status, 200);

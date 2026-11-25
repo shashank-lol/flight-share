@@ -4,8 +4,9 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, Check, ChevronRight, Plane, ShieldCheck, Users} from 'lucide-react';
 import {useEffect, useRef, useState, type FormEvent} from 'react';
+import {demoBooking, demoFlight} from '@/domain/demo';
 import {api, ApiError, defaultPreferences, type FlightDetails, type Preferences, type Profile, type VerificationStatus} from './api';
-import {BaggageFields, baggagePayload, defaultRide, emptyBaggage, Field, PreferenceFields, RideFields, ridePayload} from './fields';
+import {Field, PreferenceFields} from './fields';
 import {FlightSearch, TicketImport, type SearchResults} from './flight-entry';
 import {AppBrand, ErrorMessage, Eyebrow, FlightTicket, Loading, Notice} from './ui';
 
@@ -44,8 +45,6 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
   const [importedFlight, setImportedFlight] = useState(false);
   const [verification, setVerification] = useState<Verification>();
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
-  const [baggage, setBaggage] = useState(emptyBaggage);
-  const [ride, setRide] = useState(defaultRide);
   const [manual, setManual] = useState({airline: '', flightNumber: '', departureAirport: '', arrivalAirport: '', departureDate: '', departureTime: ''});
   const [booking, setBooking] = useState(emptyBooking);
   const [busy, setBusy] = useState(false);
@@ -140,8 +139,7 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
     if (!verification) return;
     void perform(async () => {
       try {
-        const weights = baggage.allowance !== '' && baggage.expected !== '' ? baggagePayload(baggage) : {};
-        const {id} = await api<{id: string}>('flights/join', {method: 'POST', body: {token: verification.token, ...preferences, ...weights, ...ridePayload(ride)}});
+        const {id} = await api<{id: string}>('flights/join', {method: 'POST', body: {token: verification.token, ...preferences}});
         router.replace(`/flights/${id}`);
       } catch (issue) {
         if (issue instanceof ApiError && (issue.status === 401 || issue.code === 'VERIFICATION_EXPIRED')) {
@@ -160,7 +158,7 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
       <aside className="fa-journey" aria-label="Onboarding progress">
         <div className="fa-journey-copy"><Eyebrow>YOUR NEXT JOURNEY</Eyebrow><h2>Good company.<br />Better travel.</h2><p>Find your flight and connect with people heading the same way.</p></div>
         <ol className="fa-step-list">{stages.map((label, index) => <li key={label} aria-current={stage === index ? 'step' : undefined}><span>{stage > index ? <Check size={14} aria-label="Completed" /> : String(index + 1).padStart(2, '0')}</span>{label}{stage === index && <ChevronRight size={16} aria-hidden="true" />}</li>)}</ol>
-        <div className="fa-journey-bottom"><ShieldCheck size={17} aria-hidden="true" /> No email needed. Ride sharing is opt-in.</div>
+        <div className="fa-journey-bottom"><ShieldCheck size={17} aria-hidden="true" /> No email needed.</div>
       </aside>
       <section className="fa-onboard-panel">
         {step === 'loading' ? <Loading label="Checking your session…" /> : <>
@@ -178,7 +176,7 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
                 onSearch={lookup} onManual={() => chooseMethod('manual')}
                 onSelect={(flight, source) => {
                   if (source === 'DEMO') {
-                    void perform(() => verify({method: 'pnr', pnr: 'DEMO12', surname: 'Traveller', departureDate: flight.departureDate}));
+                    void perform(() => verify({method: 'pnr', pnr: demoBooking.pnr, surname: demoBooking.surname, departureDate: flight.departureDate}));
                     return;
                   }
                   setManual(manualDraft(flight));
@@ -191,20 +189,20 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
               {method === 'manual' ? <>
                 {importedFlight && <Notice icon={Check}>Ticket text cleared. Review the imported flight and correct anything that doesn’t match your itinerary.</Notice>}
                 <div className="fa-fields-two">
-                  <Field label="Airline code" hint="2–3 characters"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z0-9]{2,3}" placeholder="e.g. BA" value={manual.airline} onChange={(event) => setManual({...manual, airline: event.target.value.toUpperCase()})} /></Field>
-                  <Field label="Flight number" hint="As printed on your itinerary"><input className="fa-uppercase" required maxLength={12} placeholder="e.g. 117" value={manual.flightNumber} onChange={(event) => setManual({...manual, flightNumber: event.target.value.toUpperCase()})} /></Field>
+                  <Field label="Airline code" hint="2–3 characters"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z0-9]{2,3}" placeholder={`e.g. ${demoFlight.airline}`} value={manual.airline} onChange={(event) => setManual({...manual, airline: event.target.value.toUpperCase()})} /></Field>
+                  <Field label="Flight number" hint="As printed on your itinerary"><input className="fa-uppercase" required maxLength={12} placeholder={`e.g. ${demoFlight.flightNumber}`} value={manual.flightNumber} onChange={(event) => setManual({...manual, flightNumber: event.target.value.toUpperCase()})} /></Field>
                 </div><div className="fa-fields-two">
-                  <Field label="Departure airport"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z]{3}" placeholder="e.g. LHR" value={manual.departureAirport} onChange={(event) => setManual({...manual, departureAirport: event.target.value.toUpperCase()})} /></Field>
-                  <Field label="Arrival airport"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z]{3}" placeholder="e.g. JFK" value={manual.arrivalAirport} onChange={(event) => setManual({...manual, arrivalAirport: event.target.value.toUpperCase()})} /></Field>
+                  <Field label="Departure airport"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z]{3}" placeholder={`e.g. ${demoFlight.departureAirport}`} value={manual.departureAirport} onChange={(event) => setManual({...manual, departureAirport: event.target.value.toUpperCase()})} /></Field>
+                  <Field label="Arrival airport"><input className="fa-uppercase" required maxLength={3} pattern="[A-Za-z]{3}" placeholder={`e.g. ${demoFlight.arrivalAirport}`} value={manual.arrivalAirport} onChange={(event) => setManual({...manual, arrivalAirport: event.target.value.toUpperCase()})} /></Field>
                 </div><div className="fa-fields-two">
                   <Field label="Departure date"><input type="date" required value={manual.departureDate} onChange={(event) => setManual({...manual, departureDate: event.target.value})} /></Field>
                   <Field label="Departure time" hint="Optional · local time"><input type="time" value={manual.departureTime} onChange={(event) => setManual({...manual, departureTime: event.target.value})} /></Field>
                 </div><Notice icon={ShieldCheck}>Manual entries are marked <strong>self-reported</strong>. They do not verify your booking with the airline.</Notice>
               </> : <>
-                <Notice>Demo only. Use <strong>DEMO12</strong> and <strong>Traveller</strong>. Do not enter real booking details.</Notice>
+                <Notice>Fictional demo only. Use <strong>{demoBooking.pnr}</strong> and <strong>{demoBooking.surname}</strong>. Do not enter real booking details.</Notice>
                 <div className="fa-fields-two">
-                  <Field label="Demo booking reference"><input autoComplete="off" required maxLength={8} pattern="[A-Za-z0-9]{5,8}" placeholder="DEMO12" value={booking.pnr} onChange={(event) => setBooking({...booking, pnr: event.target.value.toUpperCase()})} /></Field>
-                  <Field label="Demo surname"><input autoComplete="off" required maxLength={100} placeholder="Traveller" value={booking.surname} onChange={(event) => setBooking({...booking, surname: event.target.value})} /></Field>
+                  <Field label="Demo booking reference"><input autoComplete="off" required maxLength={8} pattern="[A-Za-z0-9]{5,8}" placeholder={demoBooking.pnr} value={booking.pnr} onChange={(event) => setBooking({...booking, pnr: event.target.value.toUpperCase()})} /></Field>
+                  <Field label="Demo surname"><input autoComplete="off" required maxLength={100} placeholder={demoBooking.surname} value={booking.surname} onChange={(event) => setBooking({...booking, surname: event.target.value})} /></Field>
                 </div>
                 <Field label="Demo departure date (optional)"><input type="date" value={booking.departureDate} onChange={(event) => setBooking({...booking, departureDate: event.target.value})} /></Field>
               </>}
@@ -215,12 +213,10 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
           </>}
           {step === 'profile' && verification && <>
             <span className="fa-icon-box"><Users size={24} aria-hidden="true" /></span><h1 ref={heading} tabIndex={-1}>Make the room yours.</h1>
-            <p className="fa-intro">Check your route and choose what you’d like to share. You can update these choices later.</p>
+            <p className="fa-intro">Check your route and set your profile. You can find airport cabs or add baggage details after joining.</p>
             <FlightTicket flight={verification.flight} status={verification.verificationStatus} />
             <form className="fa-form" onSubmit={join}>
               <fieldset className="fa-fieldset"><legend>Your profile</legend><PreferenceFields compact value={preferences} onChange={setPreferences} suggestedName={importedName ?? firstName(verification.suggestedDisplayName)} /></fieldset>
-              <fieldset className="fa-fieldset"><legend>Your party and airport ride</legend><RideFields value={ride} onChange={setRide} />{ride.rideOptIn && !verification.flight.departureTime && <p className="fa-entry-caption">Add the local departure time in the room to see ride matches.</p>}</fieldset>
-              <fieldset className="fa-fieldset fa-stack"><legend>Your checked baggage (optional)</legend><p className="fa-entry-caption">Add only your own checked baggage, not your party’s combined allowances. Confirm rules with your airline. Never carry unknown items for someone else.</p><BaggageFields optional value={baggage} onChange={setBaggage} /></fieldset>
               <ErrorMessage error={error} />
               <div className="fa-actions"><button className="fa-button fa-secondary" type="button" disabled={busy} onClick={() => changeStep('flight')}><ArrowLeft size={16} aria-hidden="true" /> Edit flight</button><button className="fa-button fa-primary" type="submit" disabled={busy}>{busy ? 'Joining…' : 'Join flight room'} <ArrowRight size={17} aria-hidden="true" /></button></div>
             </form>

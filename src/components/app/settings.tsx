@@ -90,7 +90,7 @@ export function SettingsPage() {
     <ErrorMessage error={result.error} retry={result.reload} />
     {!result.data && !result.error && <Loading label="Loading your profile…" />}
     {result.data && <div className="fa-settings-grid">
-      <section className="fa-panel fa-stack"><div className="fa-panel-head"><span className="fa-icon-box"><UserRound size={23} aria-hidden="true" /></span><div><h2>Profile and preferences</h2><p>These choices apply to all your flight rooms. Edit baggage for each flight in its room.</p></div></div>
+      <section className="fa-panel fa-stack"><div className="fa-panel-head"><span className="fa-icon-box"><UserRound size={23} aria-hidden="true" /></span><div><h2>Profile and preferences</h2><p>These choices apply to all your flights. Edit baggage on each flight’s Baggage tab.</p></div></div>
       {result.data.profile ? <ProfileForm profile={result.data.profile} /> : <><p className="fa-muted">Join your first flight to set up your traveller profile.</p><Link className="fa-button fa-primary" href="/onboarding?add=1">Find your flight</Link></>}</section>
       <div className="fa-stack"><BlockList /><AccountActions /></div>
     </div>}

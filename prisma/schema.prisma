@@ -84,8 +84,8 @@ model Flight {
 
   memberships   FlightMembership[]
   verifications VerificationRecord[]
-  conversations Conversation[] @relation("FlightConversations")
-  rideConversations Conversation[] @relation("RideFlightConversations")
+  conversationContextsOne ConversationContext[] @relation("ContextFlightOne")
+  conversationContextsTwo ConversationContext[] @relation("ContextFlightTwo")
   groupMessages FlightGroupMessage[]
 
   @@index([departureDate])
@@ -104,40 +104,134 @@ model FlightMembership {
   cabinBaggage           String?
   baggageReported       Boolean            @default(true)
   partySize              Int                @default(1)
-  rideOptIn              Boolean            @default(false)
-  pickupArea             String?
   verificationStatus     VerificationStatus
   joinedAt              DateTime           @default(now())
   isActive              Boolean            @default(true)
   flight                Flight             @relation(fields: [flightId], references: [id], onDelete: Cascade)
   user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cabListings           CabListing[]
+  cabRequests           CabRequest[]
+  baggageSent           BaggageRequest[] @relation("BaggageSender")
+  baggageReceived       BaggageRequest[] @relation("BaggageRecipient")
+  baggageReservation    BaggageReservation?
 
   @@unique([flightId, userId])
+  @@unique([id, flightId])
   @@unique([flightId, alias])
   @@index([flightId, isActive, joinedAt])
   @@index([userId, isActive])
-  @@index([flightId, rideOptIn, isActive])
+}
+
+enum BaggageRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  CANCELLED
+  ENDED
+}
+
+model BaggageRequest {
+  id                    String               @id @default(uuid())
+  flightId              String
+  senderMembershipId    String
+  recipientMembershipId String
+  status                BaggageRequestStatus @default(PENDING)
+  conversationId        String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  senderMembership      FlightMembership     @relation("BaggageSender", fields: [senderMembershipId, flightId], references: [id, flightId], onDelete: Cascade)
+  recipientMembership   FlightMembership     @relation("BaggageRecipient", fields: [recipientMembershipId, flightId], references: [id, flightId], onDelete: Cascade)
+  conversation          Conversation?        @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  reservations          BaggageReservation[]
+
+  @@index([senderMembershipId, status])
+  @@index([recipientMembershipId, status])
+  @@index([conversationId])
+}
+
+// One accepted baggage match per flight membership, irrespective of request direction.
+model BaggageReservation {
+  membershipId String           @id
+  requestId    String
+  membership   FlightMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  request      BaggageRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+enum CabRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  CLOSED
+}
+
+model CabListing {
+  id               String           @id @default(uuid())
+  hostMembershipId String
+  pickupArea       String
+  freeSeats        Int
+  closedAt         DateTime?
+  createdAt        DateTime         @default(now())
+  hostMembership   FlightMembership @relation(fields: [hostMembershipId], references: [id], onDelete: Cascade)
+  requests         CabRequest[]
+
+  @@index([hostMembershipId])
+}
+
+model CabRequest {
+  id                String           @id @default(uuid())
+  listingId         String
+  riderMembershipId String
+  seats             Int
+  window            Int
+  status            CabRequestStatus @default(PENDING)
+  conversationId    String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  listing           CabListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  riderMembership   FlightMembership @relation(fields: [riderMembershipId], references: [id], onDelete: Cascade)
+  conversation      Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@unique([listingId, riderMembershipId])
+  @@index([listingId, status])
+  @@index([riderMembershipId, createdAt])
+  @@index([conversationId])
 }
 
 model Conversation {
   id               String   @id @default(uuid())
-  flightId         String
-  rideFlightId     String?
-  scopeKey         String   @unique
   participantOneId String
   participantTwoId String
   createdAt        DateTime @default(now())
-  flight           Flight   @relation("FlightConversations", fields: [flightId], references: [id], onDelete: Cascade)
-  rideFlight       Flight?  @relation("RideFlightConversations", fields: [rideFlightId], references: [id], onDelete: Cascade)
   participantOne   User     @relation("ParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
   participantTwo   User     @relation("ParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
   messages         Message[]
+  baggageRequests  BaggageRequest[]
+  cabRequests      CabRequest[]
+  contexts         ConversationContext[]
+
+  @@unique([participantOneId, participantTwoId])
+  @@index([participantTwoId])
+}
+
+model ConversationContext {
+  id               String @id @default(uuid())
+  conversationId   String
+  flightOneId      String
+  flightTwoId      String
+  ride             Boolean @default(false)
+  createdAt        DateTime @default(now())
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  flightOne        Flight @relation("ContextFlightOne", fields: [flightOneId], references: [id], onDelete: Cascade)
+  flightTwo        Flight @relation("ContextFlightTwo", fields: [flightTwoId], references: [id], onDelete: Cascade)
   rideConfirmations RideConfirmation[]
 
-  @@index([flightId])
-  @@index([rideFlightId])
-  @@index([participantOneId])
-  @@index([participantTwoId])
+  @@unique([conversationId, flightOneId, flightTwoId])
+  @@index([flightOneId])
+  @@index([flightTwoId])
 }
 
 model FlightGroupMessage {
@@ -156,13 +250,13 @@ model FlightGroupMessage {
 }
 
 model RideConfirmation {
-  conversationId String
+  contextId      String
   userId         String
   createdAt      DateTime @default(now())
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  context        ConversationContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
   user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([conversationId, userId])
+  @@id([contextId, userId])
   @@index([userId])
 }
 

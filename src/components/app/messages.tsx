@@ -8,7 +8,7 @@ import {api, ApiError, type Page} from './api';
 import {AppShell} from './app-shell';
 import {Field} from './fields';
 import {requestPresence, sendTyping, useRealtime} from './realtime';
-import {Dialog, SafetyActions} from './safety';
+import {Dialog} from './safety';
 import {formatTime, type ChatMessage, type Conversation, type MessagePage, type RideCompletion} from './social-types';
 import {Empty, ErrorMessage, Eyebrow, Loading, Pager} from './ui';
 import {useResource} from './use-resource';
@@ -18,21 +18,17 @@ export function startConversation(flightId: string, passengerId: string) {
   return api<Conversation>(`flights/${flightId}/conversations`, {method: 'POST', body: {passengerId}});
 }
 
-export function startRideConversation(flightId: string, passengerId: string) {
-  return api<Conversation>(`flights/${flightId}/ride-conversations`, {method: 'POST', body: {passengerId}});
-}
-
 export function ConversationList({flightId}: {flightId?: string}) {
   const [page, setPage] = useState(1);
   const result = useResource<Page<Conversation>>(`conversations?${new URLSearchParams({page: String(page), ...(flightId ? {flightId} : {})})}`);
   useRealtime({connect: result.reload, 'conversation:updated': result.reload, 'conversations:updated': result.reload, 'flight:updated': result.reload});
   return <section className="fa-section">
-    <div className="fa-section-head"><div><Eyebrow>TRAVEL TOGETHER</Eyebrow>{flightId ? <h2>Messages</h2> : <h1>Messages</h1>}<p className="fa-muted">Private conversations with fellow travellers and ride matches.</p></div></div>
+    <div className="fa-section-head"><div><Eyebrow>DIRECT MESSAGES</Eyebrow>{flightId ? <h2>Messages</h2> : <h1>Messages</h1>}<p className="fa-muted">One private chat per traveller, for flights, baggage or airport cabs.</p></div></div>
     <ErrorMessage error={result.error} retry={result.reload} />
     {!result.data && !result.error && <Loading label="Loading conversations…" />}
-    {result.data?.items.length === 0 && <Empty icon={MessageCircle} title="No conversations yet"><p>Open a passenger profile in your flight room and select Message to start a conversation.</p><Link className="fa-link" href={flightId ? `/flights/${flightId}` : '/dashboard'}>{flightId ? 'See passengers' : 'See my flights'} <ChevronRight size={15} aria-hidden="true" /></Link></Empty>}
+    {result.data?.items.length === 0 && <Empty icon={MessageCircle} title="No conversations yet"><p>Select Message next to a passenger to start a private conversation.</p><Link className="fa-link" href={flightId ? `/flights/${flightId}?tab=passengers` : '/dashboard'}>{flightId ? 'See passengers' : 'See my flights'} <ChevronRight size={15} aria-hidden="true" /></Link></Empty>}
     {!!result.data?.items.length && <ul className="fa-inbox">{result.data.items.map((conversation) => <li key={conversation.id}><Link href={`/dashboard/messages/${conversation.id}`}>
-      <span className="fa-avatar"><UserRound size={20} aria-hidden="true" /></span><span className="fa-inbox-body"><strong>{conversation.participant.displayName}{conversation.rideFlightId && <small className="fa-thread-ride-label">Ride chat</small>}</strong><span>{conversation.lastMessage ? `${conversation.lastMessage.isOwn ? 'You: ' : ''}${conversation.lastMessage.content}` : 'No messages yet'}</span></span><span className="fa-inbox-meta">{conversation.lastMessage && <time dateTime={conversation.lastMessage.createdAt}>{formatTime(conversation.lastMessage.createdAt)}</time>}{conversation.unreadCount > 0 && <span className="fa-count" aria-label={`${conversation.unreadCount} unread`}>{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</span>}</span><ChevronRight size={18} aria-hidden="true" />
+      <span className="fa-avatar"><UserRound size={20} aria-hidden="true" /></span><span className="fa-inbox-body"><strong>{conversation.participant.displayName}</strong><span>{conversation.lastMessage ? `${conversation.lastMessage.isOwn ? 'You: ' : ''}${conversation.lastMessage.content}` : 'No messages yet'}</span></span><span className="fa-inbox-meta">{conversation.lastMessage && <time dateTime={conversation.lastMessage.createdAt}>{formatTime(conversation.lastMessage.createdAt)}</time>}{conversation.unreadCount > 0 && <span className="fa-count" aria-label={`${conversation.unreadCount} unread`}>{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</span>}</span><ChevronRight size={18} aria-hidden="true" />
     </Link></li>)}</ul>}
     {result.data && <Pager page={page} hasMore={result.data.hasMore} onChange={setPage} />}
   </section>;
@@ -273,7 +269,7 @@ function Thread({conversation, refresh}: {conversation: Conversation; refresh: (
   const result = useChatHistory(path);
   const {reload, markRead} = result;
   const connected = useRealtime({connect: () => reload(), 'conversation:updated': (event) => { if (event.conversationId === id) reload(); }, 'conversations:updated': () => reload(true), 'flight:updated': (event) => {
-    if (event.flightId === conversation.flightId || event.flightId === conversation.rideFlightId) reload(true);
+    if (conversation.contexts.some(({flightId, peerFlightId}) => event.flightId === flightId || event.flightId === peerFlightId)) reload(true);
   }, 'conversation:typing': (event) => {
     if (event.conversationId !== id) return;
     clearTimeout(peerTypingTimer.current);
@@ -334,13 +330,13 @@ function Thread({conversation, refresh}: {conversation: Conversation; refresh: (
     <div className="fa-thread-heading-main">
       <Link href="/dashboard/messages" className="fa-icon-button fa-thread-back" aria-label="All messages" title="All messages"><ArrowLeft size={20} aria-hidden="true" /></Link>
       <span className="fa-avatar"><UserRound size={21} aria-hidden="true" /></span>
-      <div className="fa-thread-title"><span>{conversation.rideFlightId ? 'PRIVATE RIDE CHAT' : 'PRIVATE FLIGHT CHAT'}</span><h1>{conversation.participant.displayName}</h1>
+      <div className="fa-thread-title"><span>PRIVATE CHAT</span><h1>{conversation.participant.displayName}</h1>
         <ChatStatus connected={connected} text={peerOnline ? 'Traveller online' : peerOnline === false ? 'Traveller offline · Live updates on' : undefined} refresh={() => { reload(true); refresh(); }} />
       </div>
       <details className="fa-thread-safety"><summary className="fa-icon-button" aria-label="Safety options" title="Safety options"><ShieldCheck size={20} aria-hidden="true" /></summary><div className="fa-thread-safety-panel">
         <p>Keep booking references, identity documents and payment details out of chat. If you meet, choose a public place at the airport.</p>
         <Link className="fa-link" href={`/flights/${conversation.flightId}?tab=messages`}>Back to flight room <ChevronRight size={14} aria-hidden="true" /></Link>
-        {conversation.rideFlightId ? <RideSafety conversation={conversation} onBlocked={blocked} /> : <SafetyActions flightId={conversation.flightId} target={conversation.participant} onBlocked={blocked} />}
+        <ThreadSafety conversation={conversation} onBlocked={blocked} />
       </div></details>
     </div>
     {conversation.rideFlightId && <RideConfirmation id={id} />}
@@ -370,7 +366,7 @@ function RideConfirmation({id}: {id: string}) {
   </div>;
 }
 
-function RideSafety({conversation, onBlocked}: {conversation: Conversation; onBlocked: () => void}) {
+function ThreadSafety({conversation, onBlocked}: {conversation: Conversation; onBlocked: () => void}) {
   const [action, setAction] = useState<'report' | 'block'>();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -398,7 +394,7 @@ function RideSafety({conversation, onBlocked}: {conversation: Conversation; onBl
 
 export function ConversationPage({id}: {id: string}) {
   const result = useResource<Conversation>(`conversations/${id}`);
-  useRealtime({connect: result.reload, 'conversation:updated': (event) => { if (event.conversationId === id) result.reload(); }, 'conversations:updated': result.reload, 'flight:updated': ({flightId}) => { if (flightId === result.data?.flightId || flightId === result.data?.rideFlightId) result.reload(); }});
+  useRealtime({connect: result.reload, 'conversation:updated': (event) => { if (event.conversationId === id) result.reload(); }, 'conversations:updated': result.reload, 'flight:updated': ({flightId}) => { if (result.data?.contexts.some((context) => flightId === context.flightId || flightId === context.peerFlightId)) result.reload(); }});
   const conversation = result.data;
   return <AppShell area="messages">
     {!conversation && <Link href="/dashboard/messages" className="fa-link"><ArrowLeft size={16} aria-hidden="true" /> All messages</Link>}

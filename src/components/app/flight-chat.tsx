@@ -1,15 +1,15 @@
 'use client';
 
-import {Users} from 'lucide-react';
+import {Info, Users} from 'lucide-react';
 import {useEffect} from 'react';
 import {ChatStatus, ChatWindow, useChatHistory} from './messages';
 import {useRealtime} from './realtime';
 
-export function FlightChat({flightId}: {flightId: string}) {
-  return <FlightChatRoom key={flightId} flightId={flightId} />;
+export function FlightChat({flightId, members}: {flightId: string; members: number}) {
+  return <FlightChatRoom key={flightId} flightId={flightId} members={members} />;
 }
 
-function FlightChatRoom({flightId}: {flightId: string}) {
+function FlightChatRoom({flightId, members}: {flightId: string; members: number}) {
   const path = `flights/${flightId}/group-messages`;
   const result = useChatHistory(path);
   const {reload} = result;
@@ -31,8 +31,8 @@ function FlightChatRoom({flightId}: {flightId: string}) {
   return <ChatWindow path={path} result={result} label="Flight group messages" group heading={<header className="fa-thread-header">
     <div className="fa-thread-heading-main">
       <span className="fa-avatar"><Users size={21} aria-hidden="true" /></span>
-      <div className="fa-thread-title"><span>FLIGHT ROOM</span><h2>Group chat</h2><ChatStatus connected={connected} refresh={() => reload(true)} /></div>
+      <div className="fa-thread-title"><h2>Group chat</h2><div className="fa-thread-meta"><span>{members} {members === 1 ? 'traveller' : 'travellers'}</span><ChatStatus connected={connected} refresh={() => reload(true)} /></div></div>
+      <details className="fa-thread-safety"><summary className="fa-icon-button" aria-label="About this group chat" title="About this group chat"><Info size={20} aria-hidden="true" /></summary><div className="fa-thread-safety-panel"><p>Everyone in this group can join the chat and see its history. Don’t share booking or payment details.</p></div></details>
     </div>
-    <p className="fa-thread-audience">Everyone in this flight room can join the chat and see its history. Don’t share booking or payment details.</p>
   </header>} />;
 }

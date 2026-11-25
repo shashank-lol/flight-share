@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {demoFlight} from '@/domain/demo';
 import {flightKey, normalizeFlightNumber, type FlightDetails} from '@/domain/flights';
 import {canUseDevDelivery} from '../config';
 import {prisma} from '../db';
@@ -75,8 +76,8 @@ export async function searchFlights(query: Query) {
   }
   scheduled.forEach((flight) => add(flight, 'SCHEDULE'));
   shared.forEach((flight) => add({...flight, ...identity, departureDate: query.date}, 'COMMUNITY'));
-  if (canUseDevDelivery() && process.env.FLIGHT_PROVIDER === 'mock' && identity.airline === 'BA' && identity.flightNumber === '117') {
-    add({...identity, departureAirport: 'LHR', arrivalAirport: 'JFK', departureDate: query.date, departureTime: '08:25'}, 'DEMO');
+  if (canUseDevDelivery() && process.env.FLIGHT_PROVIDER === 'mock' && identity.airline === demoFlight.airline && identity.flightNumber === demoFlight.flightNumber) {
+    add({...demoFlight, departureDate: query.date}, 'DEMO');
   }
   return {items: [...items.values()], liveEnabled: !!key, liveError};
 }

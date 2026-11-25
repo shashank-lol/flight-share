@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {Bell, ChevronRight, LayoutGrid, MessageCircle, Plane, Plus, Settings, ShieldCheck} from 'lucide-react';
+import {ArrowLeft, Bell, ChevronRight, LayoutGrid, MessageCircle, Plane, Plus, Settings, ShieldCheck} from 'lucide-react';
 import {useEffect, type ReactNode} from 'react';
 import {useRealtime} from './realtime';
 import type {Notifications} from './social-types';
@@ -26,9 +26,9 @@ export function AppShell({area, breadcrumb, children}: {area: Area; breadcrumb?:
     return () => window.removeEventListener('flightshare:notifications', notices.reload);
   }, [notices.reload]);
   const unread = notices.data?.unreadCount ?? 0;
-  return <div className="fa-app">
+  return <div className={`fa-app${area === 'flight' ? ' fa-flight-shell' : ''}`}>
     <a className="fs-skip-link" href="#app-main">Skip to content</a>
-    <header className="fa-app-header"><div className="fa-wrap fa-header-inner"><AppBrand /><div className="fa-header-right"><Link href="/onboarding?add=1" className="fa-button fa-primary fa-compact"><Plus size={17} aria-hidden="true" /> <span>Add flight</span></Link></div></div></header>
+    <header className="fa-app-header"><div className="fa-wrap fa-header-inner"><div className="fa-header-brand">{area === 'flight' && <Link href="/dashboard" className="fa-icon-button fa-flight-shortcut" aria-label="My flights" title="My flights"><ArrowLeft size={20} aria-hidden="true" /></Link>}<AppBrand /></div><div className="fa-header-right">{area === 'flight' && <Link href="/dashboard/notifications" className="fa-icon-button fa-flight-shortcut" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} title="Notifications"><Bell size={20} aria-hidden="true" />{unread > 0 && <span className="fa-shortcut-dot" />}</Link>}<Link href="/onboarding?add=1" className="fa-button fa-primary fa-compact fa-header-add"><Plus size={17} aria-hidden="true" /> <span>Add flight</span></Link></div></div></header>
     <div className="fa-wrap fa-shell">
       <aside className="fa-sidebar">
         <p className="fa-sidebar-label">WORKSPACE</p>

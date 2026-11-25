@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {ArrowUpRight, Bell, Check, Luggage, MessageCircle, Users} from 'lucide-react';
+import {ArrowUpRight, Bell, Car, Check, Luggage, MessageCircle, Users} from 'lucide-react';
 import {useState} from 'react';
 import {api} from './api';
 import {AppShell} from './app-shell';
@@ -16,6 +16,8 @@ function notificationDetails({type, payload}: Notification) {
   if (type === 'NEW_MESSAGE') return {title: 'New message', text: 'A traveller sent you a message.', icon: MessageCircle, href: payload.conversationId ? `/dashboard/messages/${encodeURIComponent(payload.conversationId)}` : '/dashboard/messages'};
   if (type === 'NEW_PASSENGER') return {title: 'New traveller in your flight room', text: 'Someone joined one of your flights.', icon: Users, href: room};
   if (type === 'BAGGAGE_MATCH') return {title: 'Potential baggage match', text: 'There may be a compatible weight estimate for your flight.', icon: Luggage, href: room ? `${room}?tab=matches` : null};
+  if (type === 'BAGGAGE_REQUEST_RECEIVED' || type === 'BAGGAGE_REQUEST_ACCEPTED') return {title: type === 'BAGGAGE_REQUEST_RECEIVED' ? 'Baggage request received' : 'Baggage match confirmed', text: 'Open Baggage to see the update.', icon: Luggage, href: room ? `${room}?tab=matches` : null};
+  if (type === 'CAB_REQUEST_RECEIVED' || type === 'CAB_REQUEST_ACCEPTED' || type === 'CAB_REQUEST_DECLINED') return {title: {CAB_REQUEST_RECEIVED: 'Cab seat request received', CAB_REQUEST_ACCEPTED: 'Cab seat request accepted', CAB_REQUEST_DECLINED: 'Cab seat request declined'}[type], text: 'Open Airport rides to see the update.', icon: Car, href: room ? `${room}?tab=rides` : null};
   return {title: 'Flight Share update', text: 'There’s an update for your account.', icon: Bell, href: null};
 }
 

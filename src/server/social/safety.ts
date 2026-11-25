@@ -1,8 +1,9 @@
 import type {Prisma} from '@prisma/client';
+import {baggageRoomUpdates, retireBaggageForPair} from '../baggage';
 import {prisma} from '../db';
 import {HttpError} from '../errors';
 import {audit} from '../log';
-import {conversationUnavailable, otherParticipant, requireConversation, requirePeer, socialWrite} from './access';
+import {otherParticipant, requireConversation, requirePeer, socialWrite} from './access';
 import {publishUpdates} from './events';
 
 async function visibilityChanged(userId: string, peerId: string, flightIds: string[]) {
@@ -20,14 +21,15 @@ async function sharedActiveFlights(db: Prisma.TransactionClient, a: string, b: s
 type ResolvePeer = (db: Prisma.TransactionClient) => Promise<string>;
 
 async function block(userId: string, resolvePeer: ResolvePeer) {
-  const {peerId, flightIds} = await socialWrite(async (db) => {
+  const {peerId, flightIds, baggageUpdates} = await socialWrite(async (db) => {
     const peerId = await resolvePeer(db);
     const key = {blockerId: userId, blockedId: peerId};
     await db.userBlock.upsert({where: {blockerId_blockedId: key}, create: key, update: {}});
-    return {peerId, flightIds: await sharedActiveFlights(db, userId, peerId)};
+    const released = await retireBaggageForPair(db, userId, peerId);
+    return {peerId, flightIds: await sharedActiveFlights(db, userId, peerId), baggageUpdates: (await baggageRoomUpdates(db, released)).filter((update) => update.userId !== userId && update.userId !== peerId)};
   });
   audit('passenger_blocked', userId);
-  await visibilityChanged(userId, peerId, flightIds);
+  await Promise.all([visibilityChanged(userId, peerId, flightIds), publishUpdates(baggageUpdates)]);
   return {blocked: true};
 }
 
@@ -45,17 +47,13 @@ export const blockPassenger = (userId: string, flightId: string, passengerId: st
 export const reportPassenger = (userId: string, flightId: string, passengerId: string, reason: string, description?: string) =>
   reportIncident(userId, (db) => requirePeer(db, userId, flightId, passengerId), reason, description);
 
-function ridePeer(userId: string, conversationId: string): ResolvePeer {
-  return async (db) => {
-    const conversation = await requireConversation(db, userId, conversationId);
-    if (!conversation.rideFlightId) throw conversationUnavailable();
-    return otherParticipant(conversation, userId);
-  };
+function conversationPeer(userId: string, conversationId: string): ResolvePeer {
+  return async (db) => otherParticipant(await requireConversation(db, userId, conversationId), userId);
 }
 
-export const blockRidePeer = (userId: string, conversationId: string) => block(userId, ridePeer(userId, conversationId));
-export const reportRidePeer = (userId: string, conversationId: string, reason: string, description?: string) =>
-  reportIncident(userId, ridePeer(userId, conversationId), reason, description);
+export const blockConversationPeer = (userId: string, conversationId: string) => block(userId, conversationPeer(userId, conversationId));
+export const reportConversationPeer = (userId: string, conversationId: string, reason: string, description?: string) =>
+  reportIncident(userId, conversationPeer(userId, conversationId), reason, description);
 
 export async function listBlocks(userId: string) {
   const rows = await prisma.userBlock.findMany({where: {blockerId: userId}, orderBy: [{createdAt: 'desc'}, {id: 'desc'}], take: 200, select: {

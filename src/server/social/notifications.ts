@@ -1,18 +1,28 @@
 import {Prisma} from '@prisma/client';
 import {z} from 'zod';
 import {HttpError} from '../errors';
-import {conversationScope, participantFlightSql, socialRead, socialWrite} from './access';
+import {conversationScope, socialRead, socialWrite} from './access';
 import {publishUpdates} from './events';
 
 const PAGE_SIZE = 30;
-const messagePayload = z.object({flightId: z.uuid(), conversationId: z.uuid()});
+const messagePayload = z.object({conversationId: z.uuid()});
 const flightPayload = z.object({flightId: z.uuid()});
+const cabPayload = flightPayload.extend({conversationId: z.uuid().optional()});
 const scope = (userId: string) => Prisma.sql`n."userId" = ${userId} AND (
   (n.type = 'NEW_MESSAGE' AND EXISTS (
-    SELECT 1 FROM "Conversation" c WHERE c.id = n.payload->>'conversationId' AND ${participantFlightSql(userId)} = n.payload->>'flightId'
-    AND ${conversationScope(userId)}
-  )) OR (n.type IN ('NEW_PASSENGER', 'BAGGAGE_MATCH') AND EXISTS (
+    SELECT 1 FROM "Conversation" c WHERE c.id = n.payload->>'conversationId' AND ${conversationScope(userId)}
+  )) OR (n.type IN ('NEW_PASSENGER', 'BAGGAGE_MATCH', 'BAGGAGE_REQUEST_RECEIVED', 'BAGGAGE_REQUEST_ACCEPTED') AND EXISTS (
     SELECT 1 FROM "FlightMembership" m WHERE m."userId" = ${userId} AND m."flightId" = n.payload->>'flightId' AND m."isActive"
+  )) OR (n.type IN ('CAB_REQUEST_RECEIVED', 'CAB_REQUEST_ACCEPTED', 'CAB_REQUEST_DECLINED') AND EXISTS (
+    SELECT 1 FROM "CabRequest" r JOIN "CabListing" l ON l.id = r."listingId"
+    JOIN "FlightMembership" host ON host.id = l."hostMembershipId" AND host."isActive"
+    JOIN "FlightMembership" rider ON rider.id = r."riderMembershipId" AND rider."isActive"
+    WHERE r.id = n.payload->>'requestId' AND (
+      (n.type = 'CAB_REQUEST_RECEIVED' AND host."userId" = ${userId} AND host."flightId" = n.payload->>'flightId') OR
+      (n.type <> 'CAB_REQUEST_RECEIVED' AND rider."userId" = ${userId} AND rider."flightId" = n.payload->>'flightId')
+    ) AND NOT EXISTS (SELECT 1 FROM "UserBlock" b WHERE
+      (b."blockerId" = host."userId" AND b."blockedId" = rider."userId") OR
+      (b."blockerId" = rider."userId" AND b."blockedId" = host."userId"))
   ))
 )`;
 
@@ -28,7 +38,7 @@ export function listNotifications(userId: string, page: number) {
       db.$queryRaw<{count: bigint}[]>(Prisma.sql`SELECT count(*) AS count FROM "Notification" n WHERE ${where} AND n."readAt" IS NULL`),
     ]);
     return {items: rows.slice(0, PAGE_SIZE).flatMap((row) => {
-      const payload = (row.type === 'NEW_MESSAGE' ? messagePayload : flightPayload).safeParse(row.payload);
+      const payload = (row.type === 'NEW_MESSAGE' ? messagePayload : row.type.startsWith('CAB_REQUEST_') ? cabPayload : flightPayload).safeParse(row.payload);
       return payload.success ? [{...row, payload: payload.data}] : [];
     }), page, hasMore: rows.length > PAGE_SIZE, unreadCount: Number(count)};
   });

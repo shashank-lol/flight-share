@@ -1,15 +1,17 @@
 import {z} from 'zod';
 import type {SessionUser} from '../auth';
+import {changeBaggageRequest, requestBaggage} from '../baggage';
 import {rateLimit, readJson} from '../http';
-import {getConversation, listConversations, listMessages, openConversation, openRideConversation, readConversation, sendMessage} from './conversations';
+import {getConversation, listConversations, listMessages, openConversation, readConversation, sendMessage} from './conversations';
 import {listGroupMessages, sendGroupMessage} from './group-messages';
 import {decodeMessageCursor} from './message-page';
 import {listNotifications, readNotifications} from './notifications';
-import {blockPassenger, blockRidePeer, listBlocks, reportPassenger, reportRidePeer, unblockPassenger} from './safety';
+import {blockConversationPeer, blockPassenger, listBlocks, reportConversationPeer, reportPassenger, unblockPassenger} from './safety';
 
 const id = z.uuid();
 const page = z.coerce.number().int().min(1).max(1000).default(1);
 const passenger = z.object({passengerId: id}).strict();
+const baggageDecision = z.strictObject({action: z.enum(['accept', 'decline', 'withdraw', 'end'])});
 // Store plain text, not HTML. Keep line breaks but reject hidden control characters except LF and tab.
 const text = (max: number) => z.string().max(max + 128).transform((s) => s.replace(/\r\n?/g, '\n').trim())
   .pipe(z.string().min(1).max(max).refine((s) => !/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(s.replace(/[\n\t]/g, ''))));
@@ -26,6 +28,17 @@ function historyQuery(request: Request) {
 export async function routeSocial(method: string, path: string[], request: Request, user: SessionUser) {
   // The enclosing router has already enforced session, origin on mutations and general rate limits.
   const userId = user.id;
+  if (path[0] === 'flights' && path[2] === 'baggage-requests') {
+    if (method === 'POST' && path.length === 3) {
+      await rateLimit('baggage_request', userId, 24, 60);
+      const {passengerId} = await readJson(request, passenger);
+      return requestBaggage(userId, id.parse(path[1]), passengerId);
+    }
+    if (method === 'PATCH' && path.length === 4) {
+      const {action} = await readJson(request, baggageDecision);
+      return changeBaggageRequest(userId, id.parse(path[1]), id.parse(path[3]), action);
+    }
+  }
   if (path[0] === 'flights' && path.length === 3 && path[2] === 'group-messages') {
     const flightId = id.parse(path[1]);
     if (method === 'GET') {
@@ -40,10 +53,10 @@ export async function routeSocial(method: string, path: string[], request: Reque
   }
   if (method === 'POST' && path[0] === 'flights' && path.length === 3) {
     const action = path[2];
-    if (action === 'conversations' || action === 'ride-conversations') {
+    if (action === 'conversations') {
       await rateLimit('conversation_open', userId, 30, 60);
       const {passengerId} = await readJson(request, passenger);
-      return (action === 'conversations' ? openConversation : openRideConversation)(userId, id.parse(path[1]), passengerId);
+      return openConversation(userId, id.parse(path[1]), passengerId);
     }
     if (action === 'block') {
       await rateLimit('passenger_block', userId, 15, 60);
@@ -65,12 +78,12 @@ export async function routeSocial(method: string, path: string[], request: Reque
     if (method === 'POST' && path.length === 3 && path[2] === 'block') {
       await rateLimit('passenger_block', userId, 15, 60);
       await readJson(request, z.strictObject({}));
-      return blockRidePeer(userId, id.parse(path[1]));
+      return blockConversationPeer(userId, id.parse(path[1]));
     }
     if (method === 'POST' && path.length === 3 && path[2] === 'report') {
       await rateLimit('passenger_report', userId, 10, 3600);
       const {reason, description} = await readJson(request, reportDetails);
-      return reportRidePeer(userId, id.parse(path[1]), reason, description);
+      return reportConversationPeer(userId, id.parse(path[1]), reason, description);
     }
     if (path.length === 3 && path[2] === 'messages') {
       const conversationId = id.parse(path[1]);

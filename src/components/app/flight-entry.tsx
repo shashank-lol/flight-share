@@ -2,6 +2,7 @@
 
 import {ArrowRight, ClipboardPaste, FileText, Search, ShieldCheck} from 'lucide-react';
 import {useState, type FormEvent} from 'react';
+import {demoFlight} from '@/domain/demo';
 import {parseTicketText} from '@/domain/ticket';
 import {ApiError, flightLabel, formatDate, type FlightDetails} from './api';
 import {Field} from './fields';
@@ -9,6 +10,8 @@ import {ErrorMessage, FlightTicket, Notice} from './ui';
 
 export type SearchResults = {items: {flight: FlightDetails; source: 'COMMUNITY' | 'SCHEDULE' | 'DEMO'}[]; liveEnabled: boolean; liveError?: boolean};
 const sources = {COMMUNITY: 'Community entry', SCHEDULE: 'Published schedule', DEMO: 'Demo schedule'};
+const exampleCode = `${demoFlight.airline}${demoFlight.flightNumber}`;
+const exampleTicket = `Flight ${demoFlight.airline} ${demoFlight.flightNumber}\n${demoFlight.departureAirport} → ${demoFlight.arrivalAirport}\nDeparture: 2026-12-05 ${demoFlight.departureTime}`;
 
 export function FlightSearch({code, date, results, busy, onCode, onDate, onSearch, onSelect, onManual}: {
   code: string; date: string; results?: SearchResults; busy: boolean;
@@ -18,7 +21,7 @@ export function FlightSearch({code, date, results, busy, onCode, onDate, onSearc
   return <>
     <form className="fa-form" onSubmit={(event) => { event.preventDefault(); onSearch(); }}>
       <div className="fa-fields-two fa-search-fields">
-        <Field label="Flight code" hint="Include the airline code."><input className="fa-uppercase" autoComplete="off" autoCapitalize="characters" spellCheck={false} required readOnly={busy} maxLength={16} pattern="([A-Za-z]{3}|[A-Za-z][A-Za-z0-9]|[0-9][A-Za-z]) *[0-9]{1,4}[A-Za-z]?" placeholder="e.g. BA117" value={code} onChange={(event) => onCode(event.target.value.toUpperCase())} /></Field>
+        <Field label="Flight code" hint="Include the airline code."><input className="fa-uppercase" autoComplete="off" autoCapitalize="characters" spellCheck={false} required readOnly={busy} maxLength={16} pattern="([A-Za-z]{3}|[A-Za-z][A-Za-z0-9]|[0-9][A-Za-z]) *[0-9]{1,4}[A-Za-z]?" placeholder={`e.g. ${exampleCode}`} value={code} onChange={(event) => onCode(event.target.value.toUpperCase())} /></Field>
         <Field label="Departure date" hint="Use the date at your departure airport."><input type="date" required readOnly={busy} value={date} onChange={(event) => onDate(event.target.value)} /></Field>
       </div>
       <button type="submit" className="fa-button fa-primary" disabled={busy}><Search size={17} aria-hidden="true" /> {busy ? 'Working…' : 'Search flights'}</button>
@@ -70,7 +73,7 @@ export function TicketImport({onImport}: {onImport: (flight: FlightDetails, sugg
 
   return <form className="fa-form" onSubmit={importTicket}>
     <Notice icon={ShieldCheck}>This text stays on your device and is cleared after import. Only the flight details you confirm are sent. You can choose whether to use the first name on the ticket.</Notice>
-    <Field label="Ticket text" hint="Paste a boarding pass barcode as text, or the flight, route and local departure date from your itinerary."><textarea rows={5} required maxLength={12_000} autoComplete="off" spellCheck={false} placeholder={'Flight BA 117\nLHR → JFK\nDeparture: 2026-12-05 08:25'} value={text} onChange={(event) => { setText(event.target.value); setError(undefined); }} /></Field>
+    <Field label="Ticket text" hint="Paste a boarding pass barcode as text, or the flight, route and local departure date from your itinerary."><textarea rows={5} required maxLength={12_000} autoComplete="off" spellCheck={false} placeholder={exampleTicket} value={text} onChange={(event) => { setText(event.target.value); setError(undefined); }} /></Field>
     <ErrorMessage error={error} />
     <button className="fa-button fa-primary" type="submit"><ClipboardPaste size={17} aria-hidden="true" /> Import ticket</button>
   </form>;

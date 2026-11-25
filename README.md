@@ -1,6 +1,6 @@
 # Flight Share
 
-Flight Share connects travellers for two different parts of a trip: share a cab **to** your departure airport with opted-in travellers whose scheduled departures are within ±20 minutes, or explore potential baggage allowance matches on your **exact flight**. Each flight also has a members-only group chat with history. It is not an airline booking, ride booking, or boarding-pass verification service.
+Flight Share lets travellers offer or request cab seats **to** their departure airport, or explore potential baggage allowance matches on their **exact flight**. Cab listings use an adjustable window around scheduled departures; a host must accept a seat request. Baggage matches have a separate flight-room section and require both travellers to agree. Each flight also has a members-only group chat. Flight Share does not book flights or rides or verify boarding passes.
 
 ## Run locally with Docker
 
@@ -19,9 +19,11 @@ Choose **Find My Flight** to go directly to search, paste-ticket import, or manu
 
 1. Subscribe to AeroDataBox on RapidAPI and create a key for your application. If a key was shared publicly or in chat, rotate it first.
 2. Copy `.env.example` to `.env`. In your private `.env`, set `AERODATABOX_RAPIDAPI_KEY` to the new key. Set `FLIGHT_PROVIDER=manual` to hide mock booking during live testing. Never commit `.env` or put a key in `NEXT_PUBLIC_*` configuration.
-3. Apply the environment with `docker compose up -d --force-recreate app`. In **Find My Flight**, search a flight code and a known departure date (local to the departure airport). A successful live result is labeled **Published schedule**. If unavailable, confirm the subscription covers the dated flight endpoint and try manual entry.
+3. Apply the environment with `docker compose up -d --force-recreate app`. In **Find My Flight**, search a flight code and a known departure date (local to the departure airport). A successful live result is labelled **Published schedule**. If unavailable, confirm the subscription covers the dated flight endpoint and try manual entry.
 
 The server calls the documented [AeroDataBox RapidAPI endpoint](https://doc.aerodatabox.com/rapidapi.html), `GET /flights/number/{flightCode}/{departureDate}`, with `dateLocalRole=Departure`. It sends no passenger information. Lookups cache successful results for one hour and empty results for five minutes. Confirm these cache durations are suitable for your plan before public operation. No PNR verification, background delay tracking, or cancellation alerts are included.
+
+### Try the fictional India demo
 
 Optional: populate the local database with fictional travel data. The seed is not run on startup.
 
@@ -29,11 +31,13 @@ Optional: populate the local database with fictional travel data. The seed is no
 docker compose --profile demo run --rm seed
 ```
 
-To try mock booking verification, enter reference **`DEMO12`** and surname **`Traveller`**. It resolves to fictional demo flight BA 117, LHR → JFK, at 08:25 local time, seven days ahead by default. Do not enter real booking references. Manual flight details are labeled self-reported; the demo result is labeled mock, not airline-verified.
+With `FLIGHT_PROVIDER=mock` locally, enter reference **`DEMO12`** and surname **`Sharma`** to try demo booking verification. It suggests **Aanya** as the display name and returns fictional **6E203, Delhi (DEL) → Mumbai (BOM), 08:25** local time, seven days ahead by default. Searching for `6E203` on that date also offers a demo result unless a schedule or community result takes precedence. Do not enter real booking references. Manual flight details are labelled **Self-reported**; the mock result is labelled **Demo booking**, not airline-verified.
 
-To get started faster, enter a flight number and local departure date, or paste supported boarding-pass/itinerary text. Ticket parsing runs locally in the browser and can suggest a given name and multiple itinerary legs for review. It does not upload a pass, verify a booking, extract details from a photo/PDF, or send a raw PNR or surname. Travellers can use an alias and set the number of seats their party needs; nobody else in the party needs to provide a name. To try cross-flight rides, opt both accounts in with flights from the same airport at e.g. `08:25` and `08:45` and different flight numbers. Always confirm pickup, vehicle capacity, and airport arrival buffer with the other traveller.
+The seed adds passengers with sample baggage estimates on 6E203 and cab listings from Dwarka and Connaught Place in Delhi. The latter is on fictional **AI505, Delhi (DEL) → Bengaluru (BLR), 08:45** local time on the same date. Neither demo itinerary represents a published schedule. The cab search defaults to 20 minutes either side of your scheduled departure and can be adjusted from 0 to 60 minutes. This filters flight times, not pickup times.
 
-To try an interaction with an empty database, open the app in two separate browser profiles (or one regular and one private window) and use different display names to join the same carrier, flight number, departure date and route. Open the other traveller's card to start a conversation. The other guest can receive the new message without refreshing.
+To try a seat request without seeded data, join the two fictional itineraries above for the same date using separate browser profiles (or one regular and one private window). In **Share a cab**, have one traveller post seats and the other send a request. The host accepts in **Received requests**, then both can use the private chat to agree on a public pickup point, luggage space and airport arrival buffer. To try baggage matching, join the **same** flight in both browsers and enter complementary estimates in **Baggage matches**, then send and accept a request there.
+
+Ticket import parses supported boarding-pass or itinerary text locally in the browser and can suggest a given name and multiple legs for review. It does not upload a pass, verify a booking, extract details from a photo or PDF, or send a raw PNR or surname.
 
 Stop the services with `docker compose down`. Database and Redis data are stored in named volumes and persist across restarts. `docker compose --profile demo down --volumes` permanently removes this stack's local data.
 
@@ -71,7 +75,7 @@ Run integration and browser tests against **disposable** PostgreSQL and Redis in
 - **PostgreSQL and Prisma** persist accounts, flight rooms, membership, preferences, messages and safety actions. **Redis** supports short-lived state and realtime coordination.
 - **Guest sessions** use secure session cookies on HTTPS. PostgreSQL stores only the token digest; no email is collected from guests. Sessions cannot be recovered across devices.
 - **Flight lookup** checks existing room schedules and optionally queries AeroDataBox via RapidAPI. Coverage depends on the provider; lookup does not verify who booked the flight. Manual entry works without credentials.
-- **Flyer points** are in-app activity, not airline miles or a trust score: 100 per distinct non-demo flight added, plus 50 per mutually self-confirmed ride (one bonus per flight). Display in ride discovery can be switched off in Settings.
+- **Flyer points** are in-app activity, not airline miles or a trust score: 100 per distinct non-demo flight added, plus 50 per mutually self-confirmed ride (one bonus per flight). You can turn off display on cab listings you publish in Settings.
 - **Baggage matching** shows a potential weight fit, not permission to combine allowances. Check the airline's policy and never accept luggage or items from strangers.
 - **Health**: `GET /api/health` checks liveness; `GET /api/health?ready=1` checks database and Redis readiness.
 

@@ -124,23 +124,25 @@ test('mobile cab seats can be posted, found with a wider window and accepted', a
     await expect(host.getByRole('heading', {name: /Your listing: Connaught Place/})).toBeVisible();
 
     await rider.goto(`/flights/${riderFlight}?tab=rides`);
-    const window = rider.getByRole('spinbutton', {name: 'Departure window (minutes)'});
+    // Use the current region if a realtime render briefly retains the previous one.
+    const discovery = rider.getByRole('region', {name: 'Share a cab', exact: true}).last();
+    const window = discovery.getByRole('spinbutton', {name: 'Departure window (minutes)'}).last();
     await expect(window).toHaveValue('20');
     await expect(window).toHaveAttribute('min', '0');
     await expect(window).toHaveAttribute('max', '60');
-    await expect(rider.getByRole('heading', {name: 'No cab listings in this window'})).toBeVisible();
-    await rider.getByRole('button', {name: 'Increase departure window by 5 minutes'}).click();
+    await expect(discovery.getByRole('heading', {name: 'No cab listings in this window'})).toBeVisible();
+    await discovery.getByRole('button', {name: 'Increase departure window by 5 minutes'}).last().click();
     await expect(window).toHaveValue('25');
-    await rider.getByRole('button', {name: 'Decrease departure window by 5 minutes'}).click();
+    await discovery.getByRole('button', {name: 'Decrease departure window by 5 minutes'}).last().click();
     await expect(window).toHaveValue('20');
     await window.fill('45');
-    await rider.getByRole('button', {name: 'Apply window'}).click();
-    await expect(rider.getByRole('heading', {name: 'Connaught Place, New Delhi'})).toBeVisible();
-    await rider.getByRole('button', {name: 'Request seats'}).click();
+    await window.press('Enter');
+    await expect(discovery.getByRole('heading', {name: 'Connaught Place, New Delhi'}).last()).toBeVisible();
+    await discovery.getByRole('button', {name: 'Request seats'}).last().click();
     const request = rider.getByRole('dialog');
     await request.getByLabel('How many seats?').fill('2');
     await request.getByRole('button', {name: 'Send seat request'}).click();
-    await rider.getByRole('button', {name: 'Sent requests'}).click();
+    await discovery.getByRole('button', {name: 'Sent requests'}).last().click();
     await expect(rider.getByText('Pending', {exact: true})).toBeVisible();
 
     await host.getByRole('button', {name: 'Received requests'}).click();

@@ -15,7 +15,7 @@ Clients start a browser-bound guest session without email and use the returned s
 
 | Method and path | Request and result |
 | --- | --- |
-| `GET /profile` | `{profile,flights,flyer}` for the current session; `profile` is null until the first flight is joined. |
+| `GET /profile` | `{profile,flights,pastFlights,flyer}` for the current session; `profile` is null until the first flight is joined. Flight entries include a nullable `historyAt` ISO timestamp. `?refresh=arrivals` optionally performs a cached, rate-limited arrival check. |
 | `PATCH /profile` | Update the supplied profile fields; returns the updated profile. |
 | `DELETE /profile` | Deletes the account, clears the session cookie and returns `{deleted:true}`. |
 | `GET /flights/options` | Public. `{mockBookingEnabled}` indicates whether the local mock provider is allowed. |
@@ -27,6 +27,8 @@ Clients start a browser-bound guest session without email and use the returned s
 | `GET /flights/{flightId}/passengers` | A membership-scoped directory page `{items,page,hasMore}`. Filters `all`, `cab`, `companions`; sorts `recent`, `name`; optional `q` and `page` query parameters. |
 
 Flight date is local to the departure airport and uses `YYYY-MM-DD`; optional time uses `HH:mm`. Airport codes are three letters. Manual entries have status `SELF_REPORTED`; local demo bookings have status `MOCK`. The fictional demo flight is 6E203, DEL → BOM at 08:25 local time. Neither status confirms boarding eligibility. Profile options are `isAnonymous`, `showBaggage`, `showTravelPreferences`, `companionship`, `showFlyer` (booleans), and `transportation` (`NONE`, `CAB_SHARE`, `PUBLIC_TRANSIT`, or `OWN_RIDE`). `displayName` is required when joining. `partySize` is 1–12 total and defaults to 1. Passenger directory `id` is the passenger's **membership ID**, not the user's account ID; use it when choosing a passenger in that flight. The flight room summary and passenger directory do not include baggage estimates. Hidden travel preferences return `null` in the directory.
+
+History is a display split, not a membership change. Classification uses a confirmed landing time when available, otherwise estimated or scheduled arrival, plus three hours. A current in-progress provider status takes precedence over the estimate. Without any arrival time, the fallback is 60 hours after the stored departure date's UTC midnight; this does not confirm landing.
 
 ## Conversations, notifications and safety
 

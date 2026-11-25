@@ -39,7 +39,7 @@ async function handle(request: Request, context: {params: Promise<{path: string[
       return ok({signedOut: true}, {'Set-Cookie': sessionCookie()});
     }
     if (endpoint === 'profile') {
-      if (method === 'GET') return ok(await flights.getProfile(user.id));
+      if (method === 'GET') return ok(await flights.getProfile(user.id, new URL(request.url).searchParams.get('refresh') === 'arrivals'));
       if (method === 'PATCH') return ok(await flights.updateProfile(user.id, await readJson(request, editProfileSchema)));
       if (method === 'DELETE') {
         const result = await flights.deleteAccount(user.id);

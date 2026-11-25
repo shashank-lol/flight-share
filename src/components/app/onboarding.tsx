@@ -61,7 +61,7 @@ export function Onboarding({addFlight}: {addFlight: boolean}) {
     const controller = new AbortController();
     api<Profile>('profile', {signal: controller.signal}).then((current) => {
       if (controller.signal.aborted) return;
-      if (current.flights.length && !addFlight) { router.replace('/dashboard'); return; }
+      if ((current.flights.length || current.pastFlights?.length) && !addFlight) { router.replace('/dashboard'); return; }
       setAccount(current);
       setPreferences(current.profile ?? defaultPreferences);
       setStep('flight');

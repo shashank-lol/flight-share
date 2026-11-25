@@ -3,6 +3,7 @@ import {Prisma, type Flight} from '@prisma/client';
 import type {z} from 'zod';
 import {potentialMatch, remainingWeight} from '@/domain/baggage';
 import {flightKey} from '@/domain/flights';
+import {arrivalUpdate, flightHistoryCutoff, knownArrival, refreshArrival} from './arrivals';
 import {baggageDto, baggageRoomRecipients, cancelPendingBaggageForUser, prunePendingBaggage, retireBaggageForMembership} from './baggage';
 import {prisma} from './db';
 import {getFlyers} from './flyer';
@@ -43,11 +44,20 @@ export async function verifyFlight(userId: string, input: z.output<typeof verify
 }
 
 const publicProfile = {displayName: true, isAnonymous: true, showBaggage: true, showTravelPreferences: true, transportation: true, companionship: true, showFlyer: true} as const;
-export async function getProfile(userId: string) {
+export async function getProfile(userId: string, refresh = false) {
   const user = await prisma.user.findUniqueOrThrow({where: {id: userId}, select: {
-    profile: {select: publicProfile}, memberships: {where: {isActive: true}, orderBy: {joinedAt: 'desc'}, select: {flight: {include: {_count: {select: {memberships: {where: {isActive: true}}}}}}}},
+    profile: {select: publicProfile}, memberships: {where: {isActive: true}, orderBy: {joinedAt: 'desc'}, select: {verificationStatus: true, flight: {include: {_count: {select: {memberships: {where: {isActive: true}}}}}}}},
   }});
-  return {profile: user.profile, flights: user.memberships.map(({flight}) => flightDto(flight, flight._count.memberships)), flyer: (await getFlyers([userId])).get(userId)};
+  const now = new Date();
+  const joined = user.memberships.map(({flight}) => flight);
+  const [flyers] = await Promise.all([getFlyers([userId]), refresh && refreshArrival(userId, user.memberships.filter(({verificationStatus}) => verificationStatus !== 'MOCK').map(({flight}) => flight), now)]);
+  const dated = joined.map((flight) => {
+    const cutoff = flightHistoryCutoff(flight);
+    return {flight, cutoff, past: cutoff !== null && cutoff <= +now};
+  });
+  const dto = ({flight, cutoff}: typeof dated[number]) => ({...flightDto(flight, flight._count.memberships), historyAt: cutoff === null ? null : new Date(cutoff).toISOString()});
+  return {profile: user.profile, flights: dated.filter((flight) => !flight.past).map(dto),
+    pastFlights: dated.filter((flight) => flight.past).sort((a, b) => (b.cutoff ?? 0) - (a.cutoff ?? 0)).map(dto), flyer: flyers.get(userId)};
 }
 
 export async function updateProfile(userId: string, profile: z.output<typeof editProfileSchema>) {
@@ -90,8 +100,10 @@ export async function joinFlight(userId: string, input: z.output<typeof joinFlig
   if (typeof raw !== 'string') throw new HttpError(409, 'VERIFICATION_EXPIRED', 'Confirm your flight details again before joining.');
   const {flight: {departureDate, ...details}, verificationStatus, method}: Verification = JSON.parse(raw);
   const instanceKey = flightKey({...details, departureDate});
+  const arrival = verificationStatus === 'MOCK' ? undefined : await knownArrival({...details, departureDate});
   const result = await socialWrite(async (tx) => {
     const flight = await tx.flight.upsert({where: {instanceKey}, create: {...details, departureDate: toDate(departureDate), instanceKey}, update: {}});
+    if (arrival && !flight.landedAt && !flight.arrivalCheckedAt) await tx.flight.update({where: {id: flight.id}, data: arrivalUpdate(arrival)});
     if (details.departureTime && !flight.departureTime) await tx.flight.updateMany({where: {id: flight.id, departureTime: null}, data: {departureTime: details.departureTime}});
     const flightId = flight.id;
     const key = {flightId_userId: {flightId, userId}};

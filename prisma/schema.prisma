@@ -80,6 +80,10 @@ model Flight {
   departureTime    String?
   externalFlightId String?
   status           String?
+  scheduledArrivalAt DateTime? @db.Timestamptz(3)
+  estimatedArrivalAt DateTime? @db.Timestamptz(3)
+  landedAt           DateTime? @db.Timestamptz(3)
+  arrivalCheckedAt   DateTime? @db.Timestamptz(3)
   createdAt        DateTime @default(now())
 
   memberships   FlightMembership[]

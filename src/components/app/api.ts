@@ -31,10 +31,10 @@ export const defaultPreferences: Preferences = {displayName: '', isAnonymous: fa
 export const transportationLabels: Record<Transportation, string> = {NONE: 'No preference', CAB_SHARE: 'Open to sharing a cab', PUBLIC_TRANSIT: 'Taking public transit', OWN_RIDE: 'Arranging my own ride'};
 export type Baggage = {baggageAllowance: number; expectedBaggageWeight: number; cabinBaggage: string | null};
 export type FlightDetails = {airline: string; flightNumber: string; departureAirport: string; arrivalAirport: string; departureDate: string; departureTime: string | null};
-export type Flight = FlightDetails & {id: string; status: string; memberCount: number};
+export type Flight = FlightDetails & {id: string; status: string | null; memberCount: number; historyAt?: string | null};
 export type Room = Flight & {membership: {id: string; verificationStatus: VerificationStatus; partySize: number}};
 export type Flyer = {points: number; tier: 'New Flyer' | 'Silver Flyer' | 'Gold Flyer' | 'Platinum Flyer'; flightsAdded: number; ridesConfirmed: number};
-export type Profile = {profile: Preferences | null; flights: Flight[]; flyer: Flyer};
+export type Profile = {profile: Preferences | null; flights: Flight[]; pastFlights: Flight[]; flyer: Flyer};
 export type Passenger = {
   id: string; displayName: string; alias: string; isAnonymous: boolean; isSelf: boolean;
   verificationStatus: VerificationStatus; transportation: Transportation | null; companionship: boolean | null; partySize: number | null;
